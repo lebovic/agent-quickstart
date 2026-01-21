@@ -98,7 +98,7 @@ export function ResizableSidebar() {
         <>
           <div className="flex flex-col flex-1 min-h-0">
             <div className="flex items-center justify-between px-4 pt-3 pb-1">
-              <h1 className="font-heading text-2xl font-medium text-text-100">Code</h1>
+              <h1 className="font-heading text-2xl font-medium text-text-100">Agent</h1>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon-sm" onClick={collapse} className="text-text-400 hover:text-text-100 hover:bg-bg-300">
