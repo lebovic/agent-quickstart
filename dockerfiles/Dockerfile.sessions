@@ -1,0 +1,38 @@
+# This is the Dockerfile for sessions spawned with the Docker executor
+
+FROM ubuntu:24.04
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Node.js 20.x and common development tools
+RUN apt-get update && apt-get install -y \
+    curl \
+    ca-certificates \
+    gnupg \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update \
+    && apt-get install -y \
+    # Node.js 20.x
+    nodejs \
+    # Version control
+    git \
+    openssh-client \
+    # Text processing
+    jq \
+    # Build tools (for native npm packages)
+    build-essential \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code globally
+RUN npm install -g @anthropic-ai/claude-code
+
+# Set up home directory for root user
+RUN mkdir -p /home/user
+ENV HOME=/home/user
+WORKDIR /home/user
+
+ENTRYPOINT ["claude"]

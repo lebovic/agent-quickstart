@@ -1,0 +1,213 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SessionStatus {
+  idle
+  running
+  paused
+  completed
+  failed
+  archived
+  deleted
+}
+
+enum EventStatus {
+  pending
+  sent
+}
+
+enum Provider {
+  hosted
+  byok
+  debug
+}
+
+model Environment {
+  id        String   @id @db.Uuid
+  name      String
+  kind      String   @default("local")
+  state     String   @default("active")
+  configEnc String?  @map("config_enc")
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  sessions  Session[]
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("environments")
+}
+
+model User {
+  id                   String    @id @default(uuid()) @db.Uuid
+  email                String    @unique
+  name                 String?
+  emailVerified        Boolean   @default(false) @map("email_verified")
+  githubInstallationId String?   @map("github_installation_id")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  // Developer settings
+  provider               Provider @default(hosted) @map("provider")
+  anthropicApiKeyEnc     String?  @map("anthropic_api_key_enc")               // BYOK mode
+  anthropicSessionKeyEnc String?  @map("anthropic_session_key_enc")           // Debug mode
+  anthropicOrgUuid       String?  @map("anthropic_org_uuid")                  // Debug mode
+
+  sessions             Session[]
+  environments         Environment[]
+  accounts             Account[]
+  authSessions         AuthSession[]
+  organizationUsers    OrganizationUser[]
+
+  @@map("users")
+}
+
+model AuthSession {
+  id           String   @id
+  userId       String   @map("user_id") @db.Uuid
+  expiresAt    DateTime @map("expires_at")
+  tokenEnc     String   @unique @map("token_enc")
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("auth_sessions")
+}
+
+model Account {
+  id                       String    @id
+  userId                   String    @map("user_id") @db.Uuid
+  accountId                String    @map("account_id")
+  providerId               String    @map("provider_id")
+  accessTokenEnc           String?   @map("access_token_enc")
+  refreshTokenEnc          String?   @map("refresh_token_enc")
+  accessTokenExpiresAt     DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt    DateTime? @map("refresh_token_expires_at")
+  scope                    String?
+  idTokenEnc               String?   @map("id_token_enc")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+
+  user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("verifications")
+}
+
+model RateLimit {
+  id          String @id
+  key         String
+  count       Int
+  lastRequest BigInt @map("last_request")
+
+  @@map("rate_limits")
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  logo      String?
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users     OrganizationUser[]
+
+  @@map("organizations")
+}
+
+model OrganizationUser {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  role           String   @default("member")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@map("organization_users")
+}
+
+// Org-level GitHub App config (singleton - one per deployment)
+model GitHubAppConfig {
+  id               String   @id @db.Uuid
+  appId            String   @map("app_id")
+  appSlug          String   @map("app_slug")  // e.g., "my-agent-quickstart" for install URL
+  clientId         String   @map("client_id")
+  clientSecretEnc  String   @map("client_secret_enc")
+  privateKeyEnc    String   @map("private_key_enc")
+  webhookSecretEnc String?  @map("webhook_secret_enc")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("github_app_config")
+}
+
+model Session {
+  id              String        @id @db.Uuid
+  title           String        @default("")
+  environmentId   String        @map("environment_id") @db.Uuid
+  userId          String?       @map("user_id") @db.Uuid
+  status          SessionStatus @default(idle)
+  type            String        @default("internal_session")
+  providerMode    Provider      @default(hosted) @map("provider_mode")
+  sessionContext  Json          @map("session_context")
+  lastEventUuid   String?       @map("last_event_uuid") @db.Uuid
+  containerId     String?       @map("container_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  environment     Environment   @relation(fields: [environmentId], references: [id])
+  user            User?         @relation(fields: [userId], references: [id])
+  events          Event[]
+
+  @@index([environmentId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("sessions")
+}
+
+model Event {
+  id              String      @id @default(uuid()) @db.Uuid
+  sessionId       String      @map("session_id") @db.Uuid
+  type            String
+  subtype         String?
+  status          EventStatus @default(pending)
+  data            Json
+  parentToolUseId String?     @map("parent_tool_use_id")
+  sequenceNum     Int         @map("sequence_num")
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  session         Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([sessionId, sequenceNum])
+  @@index([sessionId, status])
+  @@map("events")
+}
