@@ -50,7 +50,7 @@ export default function LoginPage() {
   return (
     <div className="w-full max-w-md space-y-8 p-8">
       <div className="absolute top-6 left-6">
-        <h1 className="font-heading text-2xl font-medium text-text-100">Code</h1>
+        <h1 className="font-heading text-2xl font-medium text-text-100">Agent</h1>
       </div>
       <div className="space-y-2 text-center">
         <h2 className="text-2xl font-semibold">Sign in</h2>

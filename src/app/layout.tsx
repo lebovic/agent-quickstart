@@ -19,7 +19,7 @@ const lora = Lora({
 })
 
 export const metadata: Metadata = {
-  title: "Code",
+  title: "Agent",
   description: "Remote Claude Code sessions",
 }
 
