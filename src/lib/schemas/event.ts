@@ -34,13 +34,21 @@ export const ControlResponse = z.object({
 
 export type ControlResponse = z.infer<typeof ControlResponse>
 
+// Content blocks for user messages - text block is fully typed for narrowing, others use passthrough
+const TextBlock = z.object({ type: z.literal("text"), text: z.string() })
+const OtherBlock = z.object({ type: z.string() }).passthrough()
+
 // Specific event types with literal type values
-export const UserEvent = z
-  .object({
-    type: z.literal("user"),
-    ...eventBase,
-  })
-  .passthrough()
+export const UserEvent = z.object({
+  type: z.literal("user"),
+  ...eventBase,
+  message: z
+    .object({
+      role: z.literal("user"),
+      content: z.union([z.string(), z.array(z.union([TextBlock, OtherBlock]))]),
+    })
+    .optional(),
+})
 
 export const AssistantEvent = z
   .object({
@@ -133,13 +141,14 @@ export const UserTextMessage = z.object({
 
 /**
  * Extract the actual event from an input that may be wrapped or unwrapped.
+ * Returns a discriminated union type for proper type narrowing.
  */
-export function extractEvent(input: InputEvent): BaseEvent {
+export function extractIngressEvent(input: InputEvent): IngressMessage {
   const wrapped = WrappedEvent.safeParse(input)
   if (wrapped.success) {
-    return wrapped.data.data
+    return IngressMessage.parse(wrapped.data.data)
   }
-  return BaseEvent.parse(input)
+  return IngressMessage.parse(input)
 }
 
 // ============================================================================

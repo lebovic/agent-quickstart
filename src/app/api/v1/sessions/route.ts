@@ -5,49 +5,12 @@ import { generateUuid, envIdToUuid, sessionIdToUuid } from "@/lib/id"
 import { badRequest, notFound, unauthorized } from "@/lib/http-errors"
 import { parsePaginationParams, paginatedResponse } from "@/lib/pagination"
 import { CreateSessionRequest, toApiSession } from "@/lib/schemas/session"
-import { extractEvent, type BaseEvent } from "@/lib/schemas/event"
+import { extractIngressEvent } from "@/lib/schemas/event"
 import { spawnSession } from "@/lib/executor"
 import { log } from "@/lib/logger"
 import { proxyToAnthropic } from "@/lib/api/proxy"
 import { getUserProviderContext } from "@/lib/auth/provider-context"
 import { generateSessionTitle } from "@/lib/ai/generate-title"
-
-/**
- * Extract prompt text from an event's message content.
- * Handles both string content and content arrays with text blocks.
- */
-function extractPromptText(event: BaseEvent): string | null {
-  // BaseEvent uses passthrough, so message may exist at runtime
-  if (!("message" in event) || event.message === null || typeof event.message !== "object") {
-    return null
-  }
-
-  const message = event.message as { content?: unknown }
-  const content = message.content
-
-  if (typeof content === "string") {
-    return content
-  }
-
-  if (!Array.isArray(content)) {
-    return null
-  }
-
-  for (const block of content) {
-    if (
-      typeof block === "object" &&
-      block !== null &&
-      "type" in block &&
-      block.type === "text" &&
-      "text" in block &&
-      typeof block.text === "string"
-    ) {
-      return block.text
-    }
-  }
-
-  return null
-}
 
 export async function GET(request: NextRequest) {
   const userContext = await getUserProviderContext()
@@ -118,12 +81,14 @@ export async function POST(request: NextRequest) {
   const hasEvents = data.events && data.events.length > 0
 
   // Extract events once upfront to avoid duplicate parsing
-  const extractedEvents = hasEvents ? data.events!.map(extractEvent) : []
+  const extractedEvents = hasEvents ? data.events!.map(extractIngressEvent) : []
 
-  // Generate title from prompt if not provided
+  // Generate title from first user message
+  const firstEvent = extractedEvents[0]
   let title = data.title
-  if ((!title || title === "") && extractedEvents.length > 0) {
-    const promptText = extractPromptText(extractedEvents[0])
+  if (firstEvent?.type === "user" && firstEvent.message) {
+    const { content } = firstEvent.message
+    const promptText = Array.isArray(content) ? content.find((b) => b.type === "text")?.text : content
     if (promptText) {
       title = await generateSessionTitle(promptText)
     }
