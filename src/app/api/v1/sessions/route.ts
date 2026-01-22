@@ -5,7 +5,7 @@ import { generateUuid, envIdToUuid, sessionIdToUuid } from "@/lib/id"
 import { badRequest, notFound, unauthorized } from "@/lib/http-errors"
 import { parsePaginationParams, paginatedResponse } from "@/lib/pagination"
 import { CreateSessionRequest, toApiSession } from "@/lib/schemas/session"
-import { extractIngressEvent } from "@/lib/schemas/event"
+import { extractEvent } from "@/lib/schemas/event"
 import { spawnSession } from "@/lib/executor"
 import { log } from "@/lib/logger"
 import { proxyToAnthropic } from "@/lib/api/proxy"
@@ -81,14 +81,14 @@ export async function POST(request: NextRequest) {
   const hasEvents = data.events && data.events.length > 0
 
   // Extract events once upfront to avoid duplicate parsing
-  const extractedEvents = hasEvents ? data.events!.map(extractIngressEvent) : []
+  const extractedEvents = hasEvents ? data.events!.map(extractEvent) : []
 
   // Generate title from first user message
   const firstEvent = extractedEvents[0]
   let title = data.title
   if (firstEvent?.type === "user" && firstEvent.message) {
     const { content } = firstEvent.message
-    const promptText = Array.isArray(content) ? content.find((b) => b.type === "text")?.text : content
+    const promptText = Array.isArray(content) ? content.find((b): b is { type: "text"; text: string } => b.type === "text")?.text : content
     if (promptText) {
       title = await generateSessionTitle(promptText)
     }

@@ -85,7 +85,19 @@ export const ResultEvent = z
   })
   .passthrough()
 
-// Discriminated union for all WebSocket ingress messages
+// Discriminated union for session events (excludes control messages)
+export const EventMessage = z.discriminatedUnion("type", [
+  UserEvent,
+  AssistantEvent,
+  ToolUseEvent,
+  ToolResultEvent,
+  SystemEvent,
+  ResultEvent,
+])
+
+export type EventMessage = z.infer<typeof EventMessage>
+
+// Discriminated union for all WebSocket ingress messages (includes control messages)
 export const IngressMessage = z.discriminatedUnion("type", [
   ControlRequest,
   ControlResponse,
@@ -143,12 +155,12 @@ export const UserTextMessage = z.object({
  * Extract the actual event from an input that may be wrapped or unwrapped.
  * Returns a discriminated union type for proper type narrowing.
  */
-export function extractIngressEvent(input: InputEvent): IngressMessage {
+export function extractEvent(input: InputEvent): EventMessage {
   const wrapped = WrappedEvent.safeParse(input)
   if (wrapped.success) {
-    return IngressMessage.parse(wrapped.data.data)
+    return EventMessage.parse(wrapped.data.data)
   }
-  return IngressMessage.parse(input)
+  return EventMessage.parse(input)
 }
 
 // ============================================================================
