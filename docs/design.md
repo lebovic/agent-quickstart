@@ -1682,7 +1682,7 @@ The application uses multiple authentication mechanisms depending on the compone
 
 | Connection            | Method             | Token Location                               | Validator                        |
 | --------------------- | ------------------ | -------------------------------------------- | -------------------------------- |
-| Browser → REST API    | BetterAuth session | Cookie (`agent-quickstart.session_token`)         | `getSession()` from BetterAuth   |
+| Browser → REST API    | BetterAuth session | Cookie (`agent-quickstart.session_token`)    | `getSession()` from BetterAuth   |
 | Browser → WebSocket   | BetterAuth session | Cookie header                                | `authenticateFromCookies()`      |
 | Container → WebSocket | JWT                | `Authorization: Bearer <jwt>`                | `authenticateWebSocketRequest()` |
 | Container → REST API  | JWT                | `Authorization: Bearer <jwt>` or `x-api-key` | `authenticateSessionRequest()`   |
