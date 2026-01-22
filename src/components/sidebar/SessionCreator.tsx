@@ -141,7 +141,7 @@ export function SessionCreator({ collapsed = false, onExpand }: { collapsed?: bo
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: prompt.slice(0, 100) + (prompt.length > 100 ? "..." : ""),
+          title: "", // Let backend generate LLM title
           environment_id: selectedEnvId,
           session_context: {
             sources: selectedRepo

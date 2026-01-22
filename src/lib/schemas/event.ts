@@ -34,13 +34,21 @@ export const ControlResponse = z.object({
 
 export type ControlResponse = z.infer<typeof ControlResponse>
 
+// Content blocks for user messages - text block is fully typed for narrowing, others use passthrough
+const TextBlock = z.object({ type: z.literal("text"), text: z.string() })
+const OtherBlock = z.object({ type: z.string() }).passthrough()
+
 // Specific event types with literal type values
-export const UserEvent = z
-  .object({
-    type: z.literal("user"),
-    ...eventBase,
-  })
-  .passthrough()
+export const UserEvent = z.object({
+  type: z.literal("user"),
+  ...eventBase,
+  message: z
+    .object({
+      role: z.literal("user"),
+      content: z.union([z.string(), z.array(z.union([TextBlock, OtherBlock]))]),
+    })
+    .optional(),
+})
 
 export const AssistantEvent = z
   .object({
@@ -77,7 +85,19 @@ export const ResultEvent = z
   })
   .passthrough()
 
-// Discriminated union for all WebSocket ingress messages
+// Discriminated union for session events (excludes control messages)
+export const EventMessage = z.discriminatedUnion("type", [
+  UserEvent,
+  AssistantEvent,
+  ToolUseEvent,
+  ToolResultEvent,
+  SystemEvent,
+  ResultEvent,
+])
+
+export type EventMessage = z.infer<typeof EventMessage>
+
+// Discriminated union for all WebSocket ingress messages (includes control messages)
 export const IngressMessage = z.discriminatedUnion("type", [
   ControlRequest,
   ControlResponse,
@@ -133,13 +153,14 @@ export const UserTextMessage = z.object({
 
 /**
  * Extract the actual event from an input that may be wrapped or unwrapped.
+ * Returns a discriminated union type for proper type narrowing.
  */
-export function extractEvent(input: InputEvent): BaseEvent {
+export function extractEvent(input: InputEvent): EventMessage {
   const wrapped = WrappedEvent.safeParse(input)
   if (wrapped.success) {
-    return wrapped.data.data
+    return EventMessage.parse(wrapped.data.data)
   }
-  return BaseEvent.parse(input)
+  return EventMessage.parse(input)
 }
 
 // ============================================================================

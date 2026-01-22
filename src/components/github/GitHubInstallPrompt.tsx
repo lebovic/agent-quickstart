@@ -24,8 +24,7 @@ export function GitHubInstallPrompt({ open, onOpenChange, installUrl }: GitHubIn
         <DialogHeader>
           <DialogTitle>Install GitHub App</DialogTitle>
           <DialogDescription>
-            Install the GitHub App to grant access to your repositories. You can choose which repositories to allow during
-            installation.
+            Install the GitHub App to grant access to your repositories. You can choose which repositories to allow during installation.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-3">

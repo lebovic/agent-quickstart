@@ -10,6 +10,7 @@ import { spawnSession } from "@/lib/executor"
 import { log } from "@/lib/logger"
 import { proxyToAnthropic } from "@/lib/api/proxy"
 import { getUserProviderContext } from "@/lib/auth/provider-context"
+import { generateSessionTitle } from "@/lib/ai/generate-title"
 
 export async function GET(request: NextRequest) {
   const userContext = await getUserProviderContext()
@@ -79,11 +80,25 @@ export async function POST(request: NextRequest) {
   const sessionId = generateUuid()
   const hasEvents = data.events && data.events.length > 0
 
+  // Extract events once upfront to avoid duplicate parsing
+  const extractedEvents = hasEvents ? data.events!.map(extractEvent) : []
+
+  // Generate title from first user message
+  const firstEvent = extractedEvents[0]
+  let title = data.title
+  if (firstEvent?.type === "user" && firstEvent.message) {
+    const { content } = firstEvent.message
+    const promptText = Array.isArray(content) ? content.find((b): b is { type: "text"; text: string } => b.type === "text")?.text : content
+    if (promptText) {
+      title = await generateSessionTitle(promptText)
+    }
+  }
+
   // Create session - status is "running" when events provided (matches API behavior)
   const session = await prisma.session.create({
     data: {
       id: sessionId,
-      title: data.title,
+      title,
       environmentId,
       userId,
       status: hasEvents ? "running" : "idle",
@@ -94,11 +109,10 @@ export async function POST(request: NextRequest) {
   })
 
   // If events are provided, insert them and spawn container
-  if (hasEvents && data.events) {
-    // Extract events from wrapper format and build records
-    const eventRecords = data.events.map((inputEvent, index) => {
-      const event = extractEvent(inputEvent)
-      // Type assertion justified: inputEvent came from request.json(), guaranteed valid JSON
+  if (hasEvents) {
+    // Build records from pre-extracted events
+    const eventRecords = extractedEvents.map((event, index) => {
+      // Type assertion justified: event came from request.json(), guaranteed valid JSON
       const eventJson = event as unknown as Prisma.InputJsonValue
       return {
         id: event.uuid,
