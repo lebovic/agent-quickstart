@@ -5,11 +5,49 @@ import { generateUuid, envIdToUuid, sessionIdToUuid } from "@/lib/id"
 import { badRequest, notFound, unauthorized } from "@/lib/http-errors"
 import { parsePaginationParams, paginatedResponse } from "@/lib/pagination"
 import { CreateSessionRequest, toApiSession } from "@/lib/schemas/session"
-import { extractEvent } from "@/lib/schemas/event"
+import { extractEvent, type BaseEvent } from "@/lib/schemas/event"
 import { spawnSession } from "@/lib/executor"
 import { log } from "@/lib/logger"
 import { proxyToAnthropic } from "@/lib/api/proxy"
 import { getUserProviderContext } from "@/lib/auth/provider-context"
+import { generateSessionTitle } from "@/lib/ai/generate-title"
+
+/**
+ * Extract prompt text from an event's message content.
+ * Handles both string content and content arrays with text blocks.
+ */
+function extractPromptText(event: BaseEvent): string | null {
+  // BaseEvent uses passthrough, so message may exist at runtime
+  if (!("message" in event) || event.message === null || typeof event.message !== "object") {
+    return null
+  }
+
+  const message = event.message as { content?: unknown }
+  const content = message.content
+
+  if (typeof content === "string") {
+    return content
+  }
+
+  if (!Array.isArray(content)) {
+    return null
+  }
+
+  for (const block of content) {
+    if (
+      typeof block === "object" &&
+      block !== null &&
+      "type" in block &&
+      block.type === "text" &&
+      "text" in block &&
+      typeof block.text === "string"
+    ) {
+      return block.text
+    }
+  }
+
+  return null
+}
 
 export async function GET(request: NextRequest) {
   const userContext = await getUserProviderContext()
@@ -79,11 +117,23 @@ export async function POST(request: NextRequest) {
   const sessionId = generateUuid()
   const hasEvents = data.events && data.events.length > 0
 
+  // Extract events once upfront to avoid duplicate parsing
+  const extractedEvents = hasEvents ? data.events!.map(extractEvent) : []
+
+  // Generate title from prompt if not provided
+  let title = data.title
+  if ((!title || title === "") && extractedEvents.length > 0) {
+    const promptText = extractPromptText(extractedEvents[0])
+    if (promptText) {
+      title = await generateSessionTitle(promptText)
+    }
+  }
+
   // Create session - status is "running" when events provided (matches API behavior)
   const session = await prisma.session.create({
     data: {
       id: sessionId,
-      title: data.title,
+      title,
       environmentId,
       userId,
       status: hasEvents ? "running" : "idle",
@@ -94,11 +144,10 @@ export async function POST(request: NextRequest) {
   })
 
   // If events are provided, insert them and spawn container
-  if (hasEvents && data.events) {
-    // Extract events from wrapper format and build records
-    const eventRecords = data.events.map((inputEvent, index) => {
-      const event = extractEvent(inputEvent)
-      // Type assertion justified: inputEvent came from request.json(), guaranteed valid JSON
+  if (hasEvents) {
+    // Build records from pre-extracted events
+    const eventRecords = extractedEvents.map((event, index) => {
+      // Type assertion justified: event came from request.json(), guaranteed valid JSON
       const eventJson = event as unknown as Prisma.InputJsonValue
       return {
         id: event.uuid,
