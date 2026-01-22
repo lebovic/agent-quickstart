@@ -58,7 +58,6 @@ There's a lot of low hanging fruit to make this project usable in production:
 - Add more sandboxing options (e.g. Cloudflare Durable Objects, Modal, etc.); the Docker implementation uses only one host and has no usage limits
 - Add per-user LLM usage tracking and limits
 - Add dynamic session containers that respect dependency requests (e.g. Node version, Python version)
-- Make titles for sessions a short LLM-generated summary of the first prompt
 - Add support for per-environment custom containers
 - Add a guide on auth integration for corporate SSO
 - Integrate more social SSO logins (e.g. Google, GitHub)
