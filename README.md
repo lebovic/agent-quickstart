@@ -22,11 +22,13 @@ To get started locally:
    ```bash
    git clone https://github.com/lebovic/agent-quickstart.git
    ```
-2. Ask Claude Code to set it up! It does pretty well when pointed to `CLAUDE.md`, `docs/setting_up_github.md`, and `docs/design.md`
+2. Ask Claude Code to guide you through setting it up! It does pretty well when pointed to `CLAUDE.md`, `docs/setting_up_github.md`, and `docs/design.md`
+
+In development mode, magic links for login are printed to the server logs.
 
 ## How sandboxing works
 
-When a new task is submitted, an agent session is spawned inside of a sandbox. That sandbox is either a Docker container (local or remote host) or a Modal sandbox. (PRs for additional sandboxes welcome!)
+When a new task is submitted, an agent session is spawned inside of a sandbox. That sandbox is either a Docker container or a Modal sandbox. (PRs for additional sandboxes welcome!)
 
 To limit the impact of a hijacked session, most credentials live outside of the sandbox. Only one session-scoped temporary authentication token is inside the container boundary. GitHub and Anthropic credentials are outside of the agent's sandbox, and authenticated requests are routed through a credential injecting proxy.
 

@@ -1,5 +1,7 @@
 # Setting Up GitHub Integration
 
+**This is an LLM-generated document intended for consumption by LLMs**
+
 This guide explains how to configure GitHub integration for self-hosted deployments. The integration allows Claude Code instances to clone and push to GitHub repositories without exposing credentials inside the sandbox.
 
 ## Overview

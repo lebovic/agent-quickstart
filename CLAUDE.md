@@ -129,12 +129,30 @@ npm run test:run  # Single run
 - **Use `proxy.ts`, not `middleware.ts`.** Next.js 16 renamed middleware to proxy. The file must be `src/proxy.ts` and export `proxy` (not `middleware`).
 - **No runtime config in proxy.** Don't export `runtime = "nodejs"` in proxy.ts - proxy always runs on Node.js.
 
+## Setup
+
+1. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Generate secrets for `JWT_SECRET`, `ENCRYPTION_SECRET`, and `BETTER_AUTH_SECRET`:
+   ```bash
+   openssl rand -base64 32  # Run 3 times, once for each secret
+   ```
+3. Set up a GitHub App for repo access - see `docs/setting_up_github.md`
+4. Start Postgres and run migrations:
+   ```bash
+   docker-compose up -d
+   npx prisma migrate deploy
+   ```
+
 ## Running
 
 ```bash
-npm run dev  # Uses custom server with WebSocket proxy on port 3000
-docker-compose up -d  # Start Postgres
+npm run dev  # Custom server with WebSocket support on port 3000
 ```
+
+In development, login magic links are printed to the server console (no email config needed).
 
 ## Executors
 
