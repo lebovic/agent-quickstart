@@ -2,7 +2,7 @@
 
 ## Architecture Overview
 
-This agent quickstart is a web application that provides a browser-based interface for Claude Code sessions. Users can create sessions that spawn Docker containers running the Claude Code CLI, with real-time WebSocket communication between the browser and container.
+This agent quickstart is a web application that provides a browser-based interface for Claude Code sessions. Users can create sessions that spawn executors (Docker containers or Modal sandboxes) running the Claude Code CLI, with real-time WebSocket communication between the browser and executor.
 
 ### Components
 
@@ -17,14 +17,12 @@ This agent quickstart is a web application that provides a browser-based interfa
                          │                        │                        │
                          ▼                        ▼                        ▼
                    ┌──────────┐            ┌────────────┐          ┌─────────────┐
-                   │ Postgres │            │   Docker   │          │  Anthropic  │
-                   │  (data)  │            │ Host/Worker│          │     API     │
+                   │ Postgres │            │  Executor  │          │  Anthropic  │
+                   │  (data)  │            │Docker/Modal│          │     API     │
                    └──────────┘            └────────────┘          └─────────────┘
-                                                 │
-                                    (local socket or remote TLS)
 ```
 
-Docker containers can run on the same host (local socket) or a remote Docker host (TLS on port 2376). Configure via `DOCKER_HOST` environment variable.
+Executors can be Docker containers (local socket or remote TLS) or Modal sandboxes. Configure via `DEFAULT_EXECUTOR` environment variable.
 
 ### Key Directories
 
@@ -42,7 +40,7 @@ Docker containers can run on the same host (local socket) or a remote Docker hos
   - `api/git-proxy/` - Git HTTP proxy for container auth
 
 - **`src/lib/`** - Shared libraries
-  - `executor/docker.ts` - Docker container spawning
+  - `executor/` - Executor abstraction (docker.ts, modal.ts)
   - `auth/` - BetterAuth, JWT handling
   - `crypto/encryption.ts` - AES-256-GCM encryption for secrets
   - `stores/` - Zustand stores for client state
@@ -51,9 +49,9 @@ Docker containers can run on the same host (local socket) or a remote Docker hos
 
 1. **Session Creation**: User creates session → stored in Postgres → returns session ID
 2. **WebSocket Connection**: Browser connects to `/ws/sessions/{id}` → client-handler authenticates
-3. **Container Spawn**: First subscriber triggers Docker container spawn with Claude Code CLI
-4. **Ingress Connection**: Container connects back to `/v1/session_ingress/ws/{id}` → ingress-handler authenticates via JWT
-5. **Message Relay**: Browser ↔ Server ↔ Container, with Postgres NOTIFY for multi-node support
+3. **Executor Spawn**: First subscriber triggers executor spawn (Docker container or Modal sandbox) with Claude Code CLI
+4. **Ingress Connection**: Executor connects back to `/v1/session_ingress/ws/{id}` → ingress-handler authenticates via JWT
+5. **Message Relay**: Browser ↔ Server ↔ Executor, with Postgres NOTIFY for multi-node support
 6. **Events Stored**: All events persisted to Postgres for history/resume
 
 ### Provider Modes
@@ -119,9 +117,12 @@ npm run test:run  # Single run
 
 ## Prisma
 
-- **Use `db push` for development migrations.** Run `npx prisma db push` to apply schema changes in development. The interactive `prisma migrate dev` command doesn't work in non-interactive environments.
+- **Prefer migrations over `db push`.** Use migrations to keep the database in sync with version-controlled migration history.
+- **Creating migrations.** After editing `prisma/schema.prisma`, run `npx prisma migrate dev --name description` to generate and apply the migration. For data-only migrations (e.g., updating existing rows), manually add SQL statements to the generated migration file before applying.
+- **Applying migrations.** Run `npx prisma migrate deploy` to apply pending migrations (non-interactive, safe for CI/production).
 - **Run seed with tsx directly.** Use `npx tsx prisma/seed.ts` instead of `npx prisma db seed` to ensure environment variables are loaded properly.
 - **Use Prisma enums for union types.** Define enums in the schema (e.g., `enum Provider { hosted byok debug }`) so types flow through naturally without casts.
+- **`sessionContext` is for API parity.** The `sessionContext` JSONB field on sessions exists for interoperability with the Anthropic API. Do not add internal/implementation-specific fields (e.g., executor state, snapshot IDs) to this JSON - use dedicated columns on the sessions table instead.
 
 ## Next.js 16
 
@@ -135,10 +136,26 @@ npm run dev  # Uses custom server with WebSocket proxy on port 3000
 docker-compose up -d  # Start Postgres
 ```
 
-## Container Spawning (Claude Code CLI)
+## Executors
+
+Sessions run in executors (Docker containers or Modal sandboxes). Configure which executor to use:
+
+- **`DEFAULT_EXECUTOR`** - Set to `"docker"` (default) or `"modal"`. New environments use this executor type.
+- **Docker:** Runs locally or on a remote Docker host. Set `DOCKER_HOST`, `DOCKER_PORT`, and TLS cert paths for remote hosts.
+- **Modal:** Cloud sandboxes via Modal. Requires `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`.
+
+### Docker
+
+- Defaults to local Docker socket if `DOCKER_HOST` is not configured.
+
+### Modal
+
+- **Requires public URL.** Set `API_URL_FOR_EXECUTORS` to a URL accessible from Modal's infrastructure. In development, use a tunnel service (ngrok, Cloudflare Tunnel, etc.) to expose your local server.
+- **Cold start behavior.** The first few sandbox creations may be slow (~30s) and the first message might fail to send. This self-resolves as the image is cached.
+
+### Claude Code CLI
 
 - **Don't use `--print` with `--sdk-url`.** When running Claude Code with `--sdk-url`, do NOT use `--print`. The `--print` flag is for non-interactive single-prompt mode and will break WebSocket communication.
-- **Remote Docker host:** Set `DOCKER_HOST`, `DOCKER_PORT`, and TLS cert paths to run containers on a separate host. Defaults to local Docker socket if not configured.
 
 ## Logging Levels
 

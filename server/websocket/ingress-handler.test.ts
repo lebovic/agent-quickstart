@@ -54,7 +54,7 @@ describe("ingress-handler", () => {
 
   beforeAll(async () => {
     await prisma.environment.create({
-      data: { id: testEnvId, name: "Test Env", kind: "local", state: "active", userId: TEST_USER_ID },
+      data: { id: testEnvId, name: "Test Env", kind: "docker", state: "active", userId: TEST_USER_ID },
     })
     await prisma.session.create({
       data: {

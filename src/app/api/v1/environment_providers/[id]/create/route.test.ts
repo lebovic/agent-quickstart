@@ -16,39 +16,39 @@ describe("POST /api/v1/environment_providers/[id]/create", () => {
     }
   })
 
-  it("creates an environment with local kind", async () => {
-    const request = new NextRequest("http://localhost/api/v1/environment_providers/local/create", {
+  it("creates an environment with docker kind", async () => {
+    const request = new NextRequest("http://localhost/api/v1/environment_providers/docker/create", {
       method: "POST",
-      body: JSON.stringify({ name: "New Local Env" }),
+      body: JSON.stringify({ name: "New Docker Env" }),
     })
-    const response = await POST(request, { params: Promise.resolve({ id: "local" }) })
+    const response = await POST(request, { params: Promise.resolve({ id: "docker" }) })
     const body = await response.json()
 
     expect(response.status).toBe(201)
-    expect(body.name).toBe("New Local Env")
-    expect(body.kind).toBe("local")
+    expect(body.name).toBe("New Docker Env")
+    expect(body.kind).toBe("docker")
     expect(body.state).toBe("active")
     expect(body.environment_id).toMatch(/^env_/)
 
     createdEnvIds.push(envIdToUuid(body.environment_id))
   })
 
-  it("creates an environment with anthropic_cloud kind", async () => {
-    const request = new NextRequest("http://localhost/api/v1/environment_providers/anthropic_cloud/create", {
+  it("creates an environment with modal kind", async () => {
+    const request = new NextRequest("http://localhost/api/v1/environment_providers/modal/create", {
       method: "POST",
-      body: JSON.stringify({ name: "New Cloud Env" }),
+      body: JSON.stringify({ name: "New Modal Env" }),
     })
-    const response = await POST(request, { params: Promise.resolve({ id: "anthropic_cloud" }) })
+    const response = await POST(request, { params: Promise.resolve({ id: "modal" }) })
     const body = await response.json()
 
     expect(response.status).toBe(201)
-    expect(body.kind).toBe("anthropic_cloud")
+    expect(body.kind).toBe("modal")
 
     createdEnvIds.push(envIdToUuid(body.environment_id))
   })
 
   it("creates an environment with config", async () => {
-    const request = new NextRequest("http://localhost/api/v1/environment_providers/local/create", {
+    const request = new NextRequest("http://localhost/api/v1/environment_providers/docker/create", {
       method: "POST",
       body: JSON.stringify({
         name: "Configured Env",
@@ -61,7 +61,7 @@ describe("POST /api/v1/environment_providers/[id]/create", () => {
         },
       }),
     })
-    const response = await POST(request, { params: Promise.resolve({ id: "local" }) })
+    const response = await POST(request, { params: Promise.resolve({ id: "docker" }) })
     const body = await response.json()
 
     expect(response.status).toBe(201)
@@ -87,21 +87,21 @@ describe("POST /api/v1/environment_providers/[id]/create", () => {
   })
 
   it("returns 400 for missing name", async () => {
-    const request = new NextRequest("http://localhost/api/v1/environment_providers/local/create", {
+    const request = new NextRequest("http://localhost/api/v1/environment_providers/docker/create", {
       method: "POST",
       body: JSON.stringify({}),
     })
-    const response = await POST(request, { params: Promise.resolve({ id: "local" }) })
+    const response = await POST(request, { params: Promise.resolve({ id: "docker" }) })
 
     expect(response.status).toBe(400)
   })
 
   it("returns 400 for empty name", async () => {
-    const request = new NextRequest("http://localhost/api/v1/environment_providers/local/create", {
+    const request = new NextRequest("http://localhost/api/v1/environment_providers/docker/create", {
       method: "POST",
       body: JSON.stringify({ name: "" }),
     })
-    const response = await POST(request, { params: Promise.resolve({ id: "local" }) })
+    const response = await POST(request, { params: Promise.resolve({ id: "docker" }) })
 
     expect(response.status).toBe(400)
   })

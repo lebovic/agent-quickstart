@@ -12,8 +12,10 @@ const GENERATION_TIMEOUT_MS = 5000
 const MAX_PROMPT_LENGTH = 500
 
 function buildPrompt(userRequest: string): string {
-  return `Generate a concise title (5-10 words) for this coding session based on the user's request. Use sentence case (only capitalize the first word and proper nouns). Return ONLY the title, no quotes or explanation.
-
+  return `
+Generate a concise title (5-10 words) for this coding session based on the user's request.
+If there is insufficient information to determine the user's intent, simply respond with "General coding session".
+Use sentence case (only capitalize the first word and proper nouns). Return ONLY the title, no quotes or explanation.
 User request: ${userRequest}`
 }
 

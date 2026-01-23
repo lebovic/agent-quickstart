@@ -11,7 +11,7 @@ describe("GET /api/v1/sessions", () => {
 
   beforeAll(async () => {
     await prisma.environment.create({
-      data: { id: testEnvId, name: "Test Env", kind: "local", state: "active", userId: TEST_USER_ID },
+      data: { id: testEnvId, name: "Test Env", kind: "docker", state: "active", userId: TEST_USER_ID },
     })
 
     for (let i = 0; i < 3; i++) {
@@ -59,7 +59,7 @@ describe("POST /api/v1/sessions", () => {
 
   beforeAll(async () => {
     await prisma.environment.create({
-      data: { id: testEnvId, name: "Test Env", kind: "local", state: "active", userId: TEST_USER_ID },
+      data: { id: testEnvId, name: "Test Env", kind: "docker", state: "active", userId: TEST_USER_ID },
     })
   })
 

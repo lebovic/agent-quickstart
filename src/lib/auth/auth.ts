@@ -155,7 +155,7 @@ export const auth = betterAuth({
               data: {
                 id: randomUUID(),
                 name: "Default",
-                kind: "local",
+                kind: config.defaultExecutor,
                 state: "active",
                 userId: user.id,
                 configEnc: encrypt(JSON.stringify(defaultEnvConfig)),

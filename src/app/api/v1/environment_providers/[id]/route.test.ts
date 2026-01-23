@@ -14,7 +14,7 @@ describe("GET /api/v1/environment_providers/[id]", () => {
       data: {
         id: testEnvId,
         name: "Test Env",
-        kind: "local",
+        kind: "docker",
         state: "active",
         configEnc: encryptConfig({ cwd: "/test" }),
         userId: TEST_USER_ID,
@@ -28,20 +28,20 @@ describe("GET /api/v1/environment_providers/[id]", () => {
 
   it("returns environment by ID", async () => {
     const envId = uuidToEnvId(testEnvId)
-    const request = new NextRequest(`http://localhost/api/v1/environment_providers/${envId}`)
+    const request = new NextRequest(`http://dockerhost/api/v1/environment_providers/${envId}`)
     const response = await GET(request, { params: Promise.resolve({ id: envId }) })
     const body = await response.json()
 
     expect(response.status).toBe(200)
     expect(body.environment_id).toBe(envId)
     expect(body.name).toBe("Test Env")
-    expect(body.kind).toBe("local")
+    expect(body.kind).toBe("docker")
     expect(body.state).toBe("active")
   })
 
   it("returns config in single response", async () => {
     const envId = uuidToEnvId(testEnvId)
-    const request = new NextRequest(`http://localhost/api/v1/environment_providers/${envId}`)
+    const request = new NextRequest(`http://dockerhost/api/v1/environment_providers/${envId}`)
     const response = await GET(request, { params: Promise.resolve({ id: envId }) })
     const body = await response.json()
 
@@ -50,14 +50,14 @@ describe("GET /api/v1/environment_providers/[id]", () => {
 
   it("returns 404 for non-existent environment", async () => {
     const envId = uuidToEnvId(generateUuid())
-    const request = new NextRequest(`http://localhost/api/v1/environment_providers/${envId}`)
+    const request = new NextRequest(`http://dockerhost/api/v1/environment_providers/${envId}`)
     const response = await GET(request, { params: Promise.resolve({ id: envId }) })
 
     expect(response.status).toBe(404)
   })
 
   it("returns 400 for invalid ID format", async () => {
-    const request = new NextRequest("http://localhost/api/v1/environment_providers/invalid")
+    const request = new NextRequest("http://dockerhost/api/v1/environment_providers/invalid")
     const response = await GET(request, { params: Promise.resolve({ id: "invalid" }) })
 
     expect(response.status).toBe(400)
@@ -72,7 +72,7 @@ describe("POST /api/v1/environment_providers/[id]", () => {
       data: {
         id: testEnvId,
         name: "Original Name",
-        kind: "local",
+        kind: "docker",
         state: "active",
         userId: TEST_USER_ID,
       },
@@ -85,7 +85,7 @@ describe("POST /api/v1/environment_providers/[id]", () => {
 
   it("updates environment name", async () => {
     const envId = uuidToEnvId(testEnvId)
-    const request = new NextRequest(`http://localhost/api/v1/environment_providers/${envId}`, {
+    const request = new NextRequest(`http://dockerhost/api/v1/environment_providers/${envId}`, {
       method: "POST",
       body: JSON.stringify({ name: "Updated Name" }),
     })
@@ -98,7 +98,7 @@ describe("POST /api/v1/environment_providers/[id]", () => {
 
   it("updates environment config", async () => {
     const envId = uuidToEnvId(testEnvId)
-    const request = new NextRequest(`http://localhost/api/v1/environment_providers/${envId}`, {
+    const request = new NextRequest(`http://dockerhost/api/v1/environment_providers/${envId}`, {
       method: "POST",
       body: JSON.stringify({ config: { cwd: "/updated" } }),
     })
@@ -111,7 +111,7 @@ describe("POST /api/v1/environment_providers/[id]", () => {
 
   it("returns 404 for non-existent environment", async () => {
     const envId = uuidToEnvId(generateUuid())
-    const request = new NextRequest(`http://localhost/api/v1/environment_providers/${envId}`, {
+    const request = new NextRequest(`http://dockerhost/api/v1/environment_providers/${envId}`, {
       method: "POST",
       body: JSON.stringify({ name: "Test" }),
     })
@@ -122,7 +122,7 @@ describe("POST /api/v1/environment_providers/[id]", () => {
 
   it("returns 400 for invalid request body", async () => {
     const envId = uuidToEnvId(testEnvId)
-    const request = new NextRequest(`http://localhost/api/v1/environment_providers/${envId}`, {
+    const request = new NextRequest(`http://dockerhost/api/v1/environment_providers/${envId}`, {
       method: "POST",
       body: JSON.stringify({ name: "" }),
     })

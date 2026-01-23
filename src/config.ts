@@ -20,8 +20,8 @@ const envSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(44),
   // Deploy URL for auth redirects, email links, etc. (e.g., https://example.com)
   DEPLOY_URL: z.string().default("http://localhost:3000"),
-  // URL for Docker containers to reach the API. Supersedes DEPLOY_URL if set.
-  API_URL_FOR_DOCKER_CONTAINERS: z.string().optional(),
+  // URL for executors (Docker/Modal) to reach the API. Supersedes DEPLOY_URL if set.
+  API_URL_FOR_EXECUTORS: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   // Domain for sending emails (e.g., auth.example.com)
   EMAIL_FROM_DOMAIN: z.string().optional(),
@@ -35,6 +35,12 @@ const envSchema = z.object({
   DOCKER_CLIENT_KEY_PATH: z.string().optional(),
   // Docker image to use for sessions
   DEFAULT_SESSION_IMAGE: z.string().default("lebovic/agent-quickstart-sessions:latest"),
+  // Modal configuration (optional - only needed if using Modal sandboxes)
+  MODAL_TOKEN_ID: z.string().optional(),
+  MODAL_TOKEN_SECRET: z.string().optional(),
+  MODAL_APP_NAME: z.string().default("agent-quickstart"),
+  // Default executor for new environments ("docker" or "modal")
+  DEFAULT_EXECUTOR: z.enum(["docker", "modal"]).default("docker"),
 })
 
 const env = envSchema.parse(process.env)
@@ -50,7 +56,7 @@ export const config = {
   useSelfHostedSessions: env.USE_SELF_HOSTED_SESSIONS === "true",
   orgUuid: env.ORG_UUID,
   deployUrl: env.DEPLOY_URL,
-  apiUrlForDockerContainers: env.API_URL_FOR_DOCKER_CONTAINERS ?? env.DEPLOY_URL,
+  apiUrlForExecutors: env.API_URL_FOR_EXECUTORS ?? env.DEPLOY_URL,
   emailFromDomain: env.EMAIL_FROM_DOMAIN,
   allowedWsOrigins:
     env.ALLOWED_WS_ORIGINS?.split(",")
@@ -66,4 +72,12 @@ export const config = {
       }
     : null,
   defaultSessionImage: env.DEFAULT_SESSION_IMAGE,
+  modal: env.MODAL_TOKEN_ID
+    ? {
+        tokenId: env.MODAL_TOKEN_ID,
+        tokenSecret: env.MODAL_TOKEN_SECRET,
+        appName: env.MODAL_APP_NAME,
+      }
+    : null,
+  defaultExecutor: env.DEFAULT_EXECUTOR,
 }

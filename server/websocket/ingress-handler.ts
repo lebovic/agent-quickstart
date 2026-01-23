@@ -63,6 +63,9 @@ export async function handleIngressConnection(sessionId: string, ws: WebSocket, 
   })
 
   // Send pending events after init to trigger processing
+  // Ideally, this would send after the sandbox is connected and ready to receive messsages
+  // In practice, this sets an upper-bound on sandbox startup time to the setTimeout delay
+  // TODO: properly queue and send messages to session on connect
   setTimeout(async () => {
     const pendingEvents = await prisma.event.findMany({
       where: { sessionId, status: "pending" },

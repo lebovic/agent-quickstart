@@ -91,7 +91,7 @@ export async function listEnvironments() {
 }
 
 export async function createEnvironment(data: CreateEnvironmentRequest) {
-  const kind = data.kind || "local"
+  const kind = data.kind || "default"
   const response = await fetch(`${ENV_API_BASE}/${kind}/create`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
