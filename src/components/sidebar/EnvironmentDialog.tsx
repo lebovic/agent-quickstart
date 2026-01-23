@@ -127,7 +127,7 @@ function EnvironmentForm({ environment, onClose, onSuccess }: EnvironmentFormPro
       } else {
         const newEnv = await createEnvironment({
           name: name.trim(),
-          kind: useSelfHosted ? "local" : "anthropic_cloud",
+          kind: useSelfHosted ? undefined : "anthropic_cloud",
           description: "",
           config: {
             environment_type: useSelfHosted ? "local" : "anthropic",

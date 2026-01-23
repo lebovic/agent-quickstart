@@ -163,7 +163,7 @@ export function DeveloperSettings() {
           <AlertTriangle className="size-4" />
           <AlertTitle>Debug only</AlertTitle>
           <AlertDescription>
-            Session keys are a dangerous and unsupported authentication method. Only use this for debugging purposes.
+            Session keys are a dangerous authentication method. Only use this for debugging Anthropic API interoperability.
           </AlertDescription>
         </Alert>
 

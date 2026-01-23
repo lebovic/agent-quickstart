@@ -16,7 +16,7 @@ describe("GET /api/v1/environment_providers", () => {
         data: {
           id,
           name: `Test Env ${i}`,
-          kind: "local",
+          kind: "docker",
           state: "active",
           userId: TEST_USER_ID,
         },

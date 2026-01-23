@@ -8,7 +8,8 @@ import { getSessionManager } from "./websocket/session-manager"
 import { handleClientConnection } from "./websocket/client-handler"
 import { handleIngressConnection } from "./websocket/ingress-handler"
 import { sessionIdToUuid } from "../src/lib/id"
-import { startCleanupJob, stopCleanupJob } from "../src/lib/executor/docker"
+import { startCleanupJob as startDockerCleanupJob, stopCleanupJob as stopDockerCleanupJob } from "../src/lib/executor/docker"
+import { startCleanupJob as startModalCleanupJob, stopCleanupJob as stopModalCleanupJob } from "../src/lib/executor/modal"
 
 function isOriginAllowed(origin: string | undefined): boolean {
   if (config.allowedWsOrigins.length === 0) return true
@@ -91,7 +92,8 @@ app.prepare().then(async () => {
 
   const shutdown = async () => {
     log.info("Shutting down server")
-    stopCleanupJob()
+    stopDockerCleanupJob()
+    stopModalCleanupJob()
     await manager.shutdown()
     server.close()
     process.exit(0)
@@ -100,8 +102,9 @@ app.prepare().then(async () => {
   process.on("SIGINT", shutdown)
   process.on("SIGTERM", shutdown)
 
-  // Start Docker container cleanup job
-  startCleanupJob()
+  // Start executor cleanup jobs
+  startDockerCleanupJob()
+  startModalCleanupJob()
 
   server.listen(port, () => {
     log.info({ hostname, port }, "Server ready")

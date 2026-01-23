@@ -133,10 +133,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   // Remove container (force stops if running)
   await removeSession(session)
 
-  // Soft delete - set status to deleted
+  // Soft delete - set status to deleted and clear executor IDs
   await prisma.session.update({
     where: { id: uuid },
-    data: { status: "deleted", containerId: null },
+    data: { status: "deleted", dockerContainerName: null, modalSandboxId: null },
   })
 
   return NextResponse.json({

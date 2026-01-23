@@ -4,11 +4,9 @@ import { type Session } from "@prisma/client"
 import { config } from "@/config"
 import { log } from "@/lib/logger"
 import { prisma } from "@/lib/db"
-import { uuidToSessionId } from "@/lib/id"
 import { SessionContext } from "@/lib/schemas/session"
 import { decryptConfig } from "@/lib/schemas/environment"
-import { generateSessionJwt } from "@/lib/auth/jwt"
-import { buildGitSetupCommands, buildCloneCommands } from "./git-commands"
+import { buildSessionCommands } from "./session-commands"
 import type { SessionWithEnvironment } from "./index"
 
 /**
@@ -52,7 +50,7 @@ const IDLE_TIMEOUT_MS = 5 * 60 * 1000
 let cleanupIntervalId: NodeJS.Timeout | null = null
 
 export type ContainerInfo = {
-  containerId: string
+  dockerContainerName: string
   container: Docker.Container
   sessionId: string
 }
@@ -63,71 +61,39 @@ type ContainerCommands = {
   setupCmd: string // Git setup, clone, checkout commands (empty string if none)
   claudeCmd: string // Claude CLI command
   workDir: string // Working directory for Claude (repo dir or /home/user)
-  env: string[] // Environment variables
+  env: string[] // Environment variables in Docker format (KEY=value)
+}
+
+/**
+ * Convert environment variables from object to Docker's string array format.
+ */
+function envToDockerFormat(env: Record<string, string>): string[] {
+  return Object.entries(env).map(([k, v]) => `${k}=${v}`)
 }
 
 /**
  * Build all commands needed to run Claude in a container.
- * Returns setup commands and Claude command separately so they can be run
- * in sequence with proper error handling.
+ * Wraps the shared buildSessionCommands and converts env to Docker format.
  */
 function buildContainerCommands(
   session: Session,
   context: SessionContext,
   environmentVariables?: Record<string, string>
 ): ContainerCommands {
-  const token = generateSessionJwt(session)
-  const taggedSessionId = uuidToSessionId(session.id)
-  const wsUrl = config.apiUrlForDockerContainers.replace(/^http/, "ws")
-
-  // Build Claude CLI args
-  const args = [
-    "--output-format=stream-json",
-    "--input-format=stream-json",
-    "--verbose",
-    "--replay-user-messages",
-    `--model=${context.model}`,
-    `--sdk-url=${wsUrl}/v1/session_ingress/ws/${taggedSessionId}`,
-    `--resume=${config.apiUrlForDockerContainers}/api/v1/session_ingress/session/${taggedSessionId}`,
-  ]
-
-  if (context.allowed_tools.length > 0) {
-    args.push(`--allowed-tools=${context.allowed_tools.join(",")}`)
+  const commands = buildSessionCommands(session, context, environmentVariables)
+  return {
+    ...commands,
+    env: envToDockerFormat(commands.env),
   }
-
-  if (context.disallowed_tools.length > 0) {
-    args.push(`--disallowed-tools=${context.disallowed_tools.join(",")}`)
-  }
-
-  const env = [
-    `TOKEN=${token}`,
-    `CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR=3`,
-    `CLAUDE_CODE_SESSION_ACCESS_TOKEN=${token}`,
-    `ANTHROPIC_BASE_URL=${config.apiUrlForDockerContainers}/api/anthropic`,
-    `ANTHROPIC_API_KEY=${token}`,
-    ...Object.entries(environmentVariables ?? {}).map(([k, v]) => `${k}=${v}`),
-  ]
-
-  const claudeCmd = `exec 3<<<"$TOKEN" && exec claude ${args.map((a) => `'${a}'`).join(" ")}`
-
-  // Build git setup commands
-  const gitSetupCommands = buildGitSetupCommands(config.apiUrlForDockerContainers)
-  const { cloneCommands, workDir } = buildCloneCommands(context.sources, context.outcomes)
-  const allSetupCommands = [...gitSetupCommands, ...cloneCommands]
-  const setupCmd = allSetupCommands.length > 0 ? allSetupCommands.join(" && ") : ""
-
-  log.debug({ sources: context.sources, outcomes: context.outcomes, setupCmd, workDir }, "Built container commands")
-
-  return { setupCmd, claudeCmd, workDir, env }
 }
 
 /**
  * Attaches to a container's stdout/stderr streams for logging.
  * Also sets up a wait() call to handle container exit.
  */
-async function attachToContainer(sessionId: string, container: Docker.Container, containerId: string): Promise<ContainerInfo> {
+async function attachToContainer(sessionId: string, container: Docker.Container, dockerContainerName: string): Promise<ContainerInfo> {
   const info: ContainerInfo = {
-    containerId,
+    dockerContainerName,
     container,
     sessionId,
   }
@@ -177,7 +143,7 @@ async function attachToContainer(sessionId: string, container: Docker.Container,
       log.info({ sessionId, exitCode: code }, "Claude Code container exited")
       activeContainers.delete(sessionId)
 
-      // Update session status - keep containerId since container still exists
+      // Update session status - keep dockerContainerName since container still exists
       // Exit codes: 0=success, 143=SIGTERM (graceful stop), 137=SIGKILL
       const newStatus = code === 0 ? "completed" : code === 143 || code === 137 ? "idle" : "failed"
       await prisma.session.update({
@@ -200,7 +166,7 @@ async function attachToContainer(sessionId: string, container: Docker.Container,
 
 /**
  * Spawns or restarts a Docker container for a session.
- * If session.containerId exists, attempts to restart the existing container.
+ * If session.dockerContainerName exists, attempts to restart the existing container.
  * If container was deleted externally, marks session as failed.
  * Otherwise creates a new container.
  */
@@ -218,17 +184,23 @@ export async function spawnContainer(session: SessionWithEnvironment): Promise<C
   const environmentVariables = envConfig?.environment
 
   // Check if we have an existing container to restart
-  if (session.containerId) {
+  if (session.dockerContainerName) {
     try {
-      const container = docker.getContainer(session.containerId)
+      const container = docker.getContainer(session.dockerContainerName)
       const inspectInfo = await container.inspect()
 
       if (!inspectInfo.State.Running) {
         // Container is stopped - start it first
-        log.info({ sessionId, containerId: session.containerId, state: inspectInfo.State.Status }, "Starting stopped container")
+        log.info(
+          { sessionId, dockerContainerName: session.dockerContainerName, state: inspectInfo.State.Status },
+          "Starting stopped container"
+        )
         await container.start()
       } else {
-        log.info({ sessionId, containerId: session.containerId }, "Container already running, killing existing Claude processes")
+        log.info(
+          { sessionId, dockerContainerName: session.dockerContainerName },
+          "Container already running, killing existing Claude processes"
+        )
 
         // Kill existing Claude processes before starting a new one
         const killExec = await container.exec({
@@ -284,22 +256,25 @@ export async function spawnContainer(session: SessionWithEnvironment): Promise<C
         data: { status: "running" },
       })
 
-      return attachToContainer(sessionId, container, session.containerId)
+      return attachToContainer(sessionId, container, session.dockerContainerName)
     } catch (err) {
       if (isDockerError(err) && err.statusCode === 404) {
         // Container was deleted externally - fail the session
-        log.error({ sessionId, containerId: session.containerId }, "Container was deleted externally, marking session as failed")
+        log.error(
+          { sessionId, dockerContainerName: session.dockerContainerName },
+          "Container was deleted externally, marking session as failed"
+        )
 
         await prisma.session.update({
           where: { id: sessionId },
-          data: { status: "failed", containerId: null },
+          data: { status: "failed", dockerContainerName: null },
         })
 
-        throw new Error(`Container ${session.containerId} was deleted externally`)
+        throw new Error(`Container ${session.dockerContainerName} was deleted externally`)
       }
 
       // Other error - log and rethrow
-      log.error({ sessionId, containerId: session.containerId, err }, "Failed to inspect/restart container")
+      log.error({ sessionId, dockerContainerName: session.dockerContainerName, err }, "Failed to inspect/restart container")
       throw err
     }
   }
@@ -386,7 +361,7 @@ export async function spawnContainer(session: SessionWithEnvironment): Promise<C
   // Store container ID in database
   await prisma.session.update({
     where: { id: sessionId },
-    data: { status: "running", containerId: containerName },
+    data: { status: "running", dockerContainerName: containerName },
   })
 
   return attachToContainer(sessionId, container, containerName)
@@ -399,7 +374,7 @@ export async function stopContainer(sessionId: string): Promise<void> {
     return
   }
 
-  log.info({ sessionId, containerId: info.containerId }, "Stopping Claude Code container")
+  log.info({ sessionId, dockerContainerName: info.dockerContainerName }, "Stopping Claude Code container")
 
   try {
     // Stop with 5 second timeout (sends SIGTERM, then SIGKILL after timeout)
@@ -427,20 +402,20 @@ export function getActiveContainerCount(): number {
  * Does not throw if container is already stopped or doesn't exist.
  */
 export async function stopSessionContainer(session: Session): Promise<void> {
-  if (!session.containerId) {
+  if (!session.dockerContainerName) {
     return
   }
 
   try {
-    const container = docker.getContainer(session.containerId)
+    const container = docker.getContainer(session.dockerContainerName)
     await container.stop({ t: 5 })
-    log.info({ sessionId: session.id, containerId: session.containerId }, "Stopped container")
+    log.info({ sessionId: session.id, dockerContainerName: session.dockerContainerName }, "Stopped container")
   } catch (err) {
     // 304 = already stopped, 404 = doesn't exist - both are fine
     if (isDockerError(err) && (err.statusCode === 304 || err.statusCode === 404)) {
       return
     }
-    log.error({ sessionId: session.id, containerId: session.containerId, err }, "Failed to stop container")
+    log.error({ sessionId: session.id, dockerContainerName: session.dockerContainerName, err }, "Failed to stop container")
     throw err
   }
 }
@@ -450,28 +425,28 @@ export async function stopSessionContainer(session: Session): Promise<void> {
  * Stops it first if running. Does not throw if container doesn't exist.
  */
 export async function removeSessionContainer(session: Session): Promise<void> {
-  if (!session.containerId) {
+  if (!session.dockerContainerName) {
     return
   }
 
   try {
-    const container = docker.getContainer(session.containerId)
+    const container = docker.getContainer(session.dockerContainerName)
     // Force remove (stops if running)
     await container.remove({ force: true })
-    log.info({ sessionId: session.id, containerId: session.containerId }, "Removed container")
+    log.info({ sessionId: session.id, dockerContainerName: session.dockerContainerName }, "Removed container")
   } catch (err) {
     // 404 = doesn't exist - that's fine
     if (isDockerError(err) && err.statusCode === 404) {
       return
     }
-    log.error({ sessionId: session.id, containerId: session.containerId, err }, "Failed to remove container")
+    log.error({ sessionId: session.id, dockerContainerName: session.dockerContainerName, err }, "Failed to remove container")
     throw err
   }
 }
 
 /**
  * Find and stop Docker containers for sessions that have been idle too long.
- * Only affects sessions with environments of kind "local" (Docker executor).
+ * Only affects sessions with environments of kind "docker".
  */
 async function cleanupIdleSessions(): Promise<void> {
   const cutoff = new Date(Date.now() - IDLE_TIMEOUT_MS)
@@ -480,30 +455,33 @@ async function cleanupIdleSessions(): Promise<void> {
   const idleSessions = await prisma.session.findMany({
     where: {
       status: "running",
-      containerId: { not: null },
+      dockerContainerName: { not: null },
       updatedAt: { lt: cutoff },
-      environment: { kind: "local" },
+      environment: { kind: "docker" },
     },
   })
 
   for (const session of idleSessions) {
-    if (!session.containerId) continue
+    if (!session.dockerContainerName) continue
 
-    log.info({ sessionId: session.id, containerId: session.containerId, updatedAt: session.updatedAt }, "Stopping idle Docker container")
+    log.info(
+      { sessionId: session.id, dockerContainerName: session.dockerContainerName, updatedAt: session.updatedAt },
+      "Stopping idle Docker container"
+    )
 
     try {
-      const container = docker.getContainer(session.containerId)
+      const container = docker.getContainer(session.dockerContainerName)
       await container.stop({ t: 5 })
     } catch (err) {
       // 304 means already stopped, 404 means container was removed
       if (isDockerError(err) && (err.statusCode === 304 || err.statusCode === 404)) {
         // Container already stopped or removed - that's fine
       } else {
-        log.warn({ sessionId: session.id, containerId: session.containerId, err }, "Failed to stop idle Docker container")
+        log.warn({ sessionId: session.id, dockerContainerName: session.dockerContainerName, err }, "Failed to stop idle Docker container")
       }
     }
 
-    // Keep containerId - container still exists, just stopped
+    // Keep dockerContainerName - container still exists, just stopped
     await prisma.session.update({
       where: { id: session.id },
       data: { status: "idle" },

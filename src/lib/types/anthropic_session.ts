@@ -65,7 +65,7 @@ export type EnvironmentConfig = {
 }
 
 export type Environment = {
-  kind: "anthropic_cloud" | "local"
+  kind: "anthropic_cloud" | "docker" | "modal"
   environment_id: string
   name: string
   created_at: string
@@ -75,7 +75,7 @@ export type Environment = {
 
 export type CreateEnvironmentRequest = {
   name: string
-  kind: "anthropic_cloud" | "local"
+  kind?: "anthropic_cloud" | "docker" | "modal"
   description: string
   config: Omit<EnvironmentConfig, "sub_type">
 }

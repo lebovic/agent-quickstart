@@ -4,7 +4,7 @@ import { uuidToEnvId } from "@/lib/id"
 import { encrypt, decrypt } from "@/lib/crypto/encryption"
 import { log } from "@/lib/logger"
 
-export const EnvironmentKind = z.enum(["local", "anthropic_cloud"])
+export const EnvironmentKind = z.enum(["docker", "modal"])
 
 export const EnvironmentState = z.enum(["active", "inactive"])
 

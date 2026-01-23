@@ -1,6 +1,8 @@
 # Architecture Design
 
-This document provides comprehensive documentation of the application architecture. This is a web application that provides a browser-based interface for Claude Code sessions, enabling users to run Claude Code in isolated Docker containers with real-time communication.
+**This is an LLM-generated document intended for consumption by LLMs**
+
+This document provides comprehensive documentation of the application architecture. This is a web application that provides a browser-based interface for Claude Code sessions, enabling users to run Claude Code in isolated containers (Docker or Modal sandboxes) with real-time communication.
 
 ---
 
@@ -61,16 +63,19 @@ The application follows a three-tier architecture with the browser frontend comm
          ┌─────────────┘              │              └─────────────┐
          ▼                            ▼                            ▼
 ┌─────────────────┐        ┌─────────────────┐          ┌─────────────────┐
-│    PostgreSQL   │        │     Docker      │          │    Anthropic    │
-│    (Prisma)     │        │   Containers    │          │       API       │
-│                 │        │                 │          │                 │
-│  - Users        │        │ ┌─────────────┐ │          │  Used for:      │
-│  - Sessions     │        │ │ Claude Code │ │          │  - Debug mode   │
-│  - Events       │        │ │     CLI     │ │          │  - Model calls  │
-│  - Environments │        │ └─────────────┘ │          │                 │
+│    PostgreSQL   │        │    Executors    │          │    Anthropic    │
+│    (Prisma)     │        │                 │          │       API       │
+│                 │        │ ┌─────────────┐ │          │                 │
+│  - Users        │        │ │   Docker    │ │          │  Used for:      │
+│  - Sessions     │        │ │ Containers  │ │          │  - Debug mode   │
+│  - Events       │        │ └─────────────┘ │          │  - Model calls  │
+│  - Environments │        │       or        │          │                 │
+│                 │        │ ┌─────────────┐ │          │                 │
+│  NOTIFY/LISTEN  │        │ │    Modal    │ │          │                 │
+│  for multi-node │        │ │  Sandboxes  │ │          │                 │
+│                 │        │ └─────────────┘ │          │                 │
 │                 │        │        │        │          │                 │
-│  NOTIFY/LISTEN  │        │        │        │          │                 │
-│  for multi-node │        │  WebSocket to   │          │                 │
+│                 │        │  WebSocket to   │          │                 │
 │                 │        │  /v1/session_   │          │                 │
 │                 │        │  ingress/ws/{id}│          │                 │
 └─────────────────┘        └─────────────────┘          └─────────────────┘
@@ -93,6 +98,7 @@ The application follows a three-tier architecture with the browser frontend comm
 | `src/app/api/git-proxy/`                | Git HTTP proxy for container auth                 |
 | `src/lib/`                              | Shared libraries                                  |
 | `src/lib/executor/docker.ts`            | Docker container spawning                         |
+| `src/lib/executor/modal.ts`             | Modal sandbox spawning                            |
 | `src/lib/auth/`                         | BetterAuth, JWT handling                          |
 | `src/lib/crypto/encryption.ts`          | AES-256-GCM encryption for secrets                |
 | `src/lib/stores/`                       | Zustand stores for client state                   |
@@ -1017,7 +1023,7 @@ List all environments for the authenticated user.
 {
   "environments": [
     {
-      "kind": "local",
+      "kind": "docker",
       "environment_id": "env_0A1B2C3D4E5F6G7H8I9J0K1L",
       "name": "Default Environment",
       "created_at": "2025-01-15T08:00:00.000Z",
@@ -1040,7 +1046,7 @@ Create a new environment.
 ```json
 {
   "name": "Production Environment",
-  "kind": "local",
+  "kind": "docker",
   "config": {
     "cwd": "/workspace",
     "environment": {
@@ -1058,7 +1064,7 @@ Create a new environment.
 
 ```json
 {
-  "kind": "local",
+  "kind": "docker",
   "environment_id": "env_3C4D5E6F7G8H9I0J1K2L3M4N",
   "name": "Production Environment",
   "created_at": "2025-01-20T11:00:00.000Z",
@@ -1207,7 +1213,7 @@ Handle GitHub OAuth callback.
 
 ## 7. Executor System
 
-The executor system provides an abstraction layer for spawning and managing Claude Code instances.
+The executor system provides an abstraction layer for spawning and managing Claude Code instances. Two executors are currently supported: Docker (local containers) and Modal (cloud sandboxes).
 
 ### Executor Dispatch Pattern
 
@@ -1215,8 +1221,13 @@ The executor system provides an abstraction layer for spawning and managing Clau
 // From src/lib/executor/index.ts
 
 export async function spawnSession(session: SessionWithEnvironment): Promise<void> {
-  if (session.environment.kind === "local") {
+  if (session.environment.kind === "docker") {
     await spawnContainer(session)
+    return
+  }
+
+  if (session.environment.kind === "modal") {
+    await spawnSandbox(session)
     return
   }
 
@@ -1224,8 +1235,13 @@ export async function spawnSession(session: SessionWithEnvironment): Promise<voi
 }
 
 export async function stopSession(session: SessionWithEnvironment): Promise<void> {
-  if (session.environment.kind === "local") {
+  if (session.environment.kind === "docker") {
     await stopSessionContainer(session)
+    return
+  }
+
+  if (session.environment.kind === "modal") {
+    await stopSessionSandbox(session)
     return
   }
 
@@ -1233,14 +1249,26 @@ export async function stopSession(session: SessionWithEnvironment): Promise<void
 }
 
 export async function removeSession(session: SessionWithEnvironment): Promise<void> {
-  if (session.environment.kind === "local") {
+  if (session.environment.kind === "docker") {
     await removeSessionContainer(session)
+    return
+  }
+
+  if (session.environment.kind === "modal") {
+    await removeSessionSandbox(session)
     return
   }
 
   throw new Error(`Unsupported environment kind: ${session.environment.kind}`)
 }
 ```
+
+### Environment Kinds
+
+| Kind     | Description             | State Persistence                                                |
+| -------- | ----------------------- | ---------------------------------------------------------------- |
+| `docker` | Local Docker containers | Container preserved on stop, restarted on resume                 |
+| `modal`  | Modal cloud sandboxes   | Filesystem snapshot on stop, new sandbox from snapshot on resume |
 
 ### Docker Executor Lifecycle
 
@@ -1300,7 +1328,7 @@ export async function removeSession(session: SessionWithEnvironment): Promise<vo
 function buildClaudeConfig(session: Session, context: SessionContext, environmentVariables?: Record<string, string>): ClaudeConfig {
   const token = generateSessionJwt(session)
   const taggedSessionId = uuidToSessionId(session.id)
-  const wsUrl = config.apiUrlForDockerContainers.replace(/^http/, "ws")
+  const wsUrl = config.apiUrlForExecutors.replace(/^http/, "ws")
 
   const args = [
     "--output-format=stream-json",
@@ -1309,7 +1337,7 @@ function buildClaudeConfig(session: Session, context: SessionContext, environmen
     "--replay-user-messages",
     `--model=${context.model}`,
     `--sdk-url=${wsUrl}/v1/session_ingress/ws/${taggedSessionId}`,
-    `--resume=${config.apiUrlForDockerContainers}/api/v1/session_ingress/session/${taggedSessionId}`,
+    `--resume=${config.apiUrlForExecutors}/api/v1/session_ingress/session/${taggedSessionId}`,
   ]
 
   if (context.allowed_tools.length > 0) {
@@ -1324,7 +1352,7 @@ function buildClaudeConfig(session: Session, context: SessionContext, environmen
     `TOKEN=${token}`,
     `CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR=3`,
     `CLAUDE_CODE_SESSION_ACCESS_TOKEN=${token}`,
-    `ANTHROPIC_BASE_URL=${config.apiUrlForDockerContainers}/api/anthropic`,
+    `ANTHROPIC_BASE_URL=${config.apiUrlForExecutors}/api/anthropic`,
     `ANTHROPIC_API_KEY=${token}`,
     ...Object.entries(environmentVariables ?? {}).map(([k, v]) => `${k}=${v}`),
   ]
@@ -1371,6 +1399,82 @@ container.wait().then(async (result) => {
   })
 })
 ```
+
+### Modal Executor Lifecycle
+
+Modal sandboxes differ from Docker in that they cannot be stopped and restarted - they must be terminated and recreated. To preserve state, the executor snapshots the filesystem before terminating.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Modal Sandbox Lifecycle                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. SPAWN (spawnSandbox)                                                    │
+│     │                                                                       │
+│     ├─► Check if session.modalSandboxId exists                              │
+│     │      │                                                                │
+│     │      ├─► YES: Reuse existing sandbox                                  │
+│     │      │        - Kill existing Claude processes                        │
+│     │      │        - Exec new Claude process with fresh JWT                │
+│     │      │                                                                │
+│     │      └─► NO: Check session.modalSnapshotId                            │
+│     │              │                                                        │
+│     │              ├─► YES: Create sandbox from snapshot image              │
+│     │              │        (skip git clone, filesystem restored)           │
+│     │              │                                                        │
+│     │              └─► NO: Create fresh sandbox from base image             │
+│     │                      - Run git clone setup commands                   │
+│     │                                                                       │
+│     └─► Exec Claude CLI                                                     │
+│                                                                             │
+│  2. RUNNING                                                                 │
+│     │                                                                       │
+│     ├─► Sandbox connects to /v1/session_ingress/ws/{id}                     │
+│     │                                                                       │
+│     └─► Activity tracked via session.updatedAt                              │
+│                                                                             │
+│  3. IDLE (cleanupIdleSessions - runs every 60s)                             │
+│     │                                                                       │
+│     ├─► Find sessions idle > 5 minutes                                      │
+│     │                                                                       │
+│     └─► Snapshot filesystem, then terminate sandbox                         │
+│                                                                             │
+│  4. STOP (stopSessionSandbox - called on archive)                           │
+│     │                                                                       │
+│     ├─► Snapshot filesystem (preserves working directory state)             │
+│     │                                                                       │
+│     └─► Terminate sandbox                                                   │
+│                                                                             │
+│  5. REMOVE (removeSessionSandbox - called on delete)                        │
+│     │                                                                       │
+│     └─► Terminate sandbox (no snapshot needed)                              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Modal Configuration
+
+Modal requires additional environment variables:
+
+```bash
+MODAL_TOKEN_ID=<modal-token-id>
+MODAL_TOKEN_SECRET=<modal-token-secret>
+MODAL_APP_NAME=agent-quickstart  # optional, defaults to "agent-quickstart"
+API_URL_FOR_EXECUTORS=<publicly-accessible-url>  # Required for Modal
+```
+
+**Note:** Modal sandboxes require `API_URL_FOR_EXECUTORS` to be a URL accessible from Modal's infrastructure. In development, use a tunnel service (ngrok, Cloudflare Tunnel, etc.).
+
+### Modal vs Docker Comparison
+
+| Aspect            | Docker                         | Modal                               |
+| ----------------- | ------------------------------ | ----------------------------------- |
+| Environment kind  | `docker`                       | `modal`                             |
+| ID storage        | `dockerContainerName`          | `modalSandboxId`                    |
+| Stop behavior     | Container stopped (preserved)  | Filesystem snapshot, then terminate |
+| Resume behavior   | Restart existing container     | Create new sandbox from snapshot    |
+| State persistence | Container filesystem persisted | Snapshot image preserves filesystem |
+| Network           | Local or remote Docker host    | Modal cloud (requires public URL)   |
 
 ---
 
@@ -1467,7 +1571,7 @@ export async function spawnK8sPod(session: SessionWithEnvironment): Promise<void
   const podName = `claude-session-${sessionId.slice(0, 8)}`
   const taggedSessionId = uuidToSessionId(sessionId)
   const token = generateSessionJwt(session)
-  const wsUrl = config.apiUrlForDockerContainers.replace(/^http/, "ws")
+  const wsUrl = config.apiUrlForExecutors.replace(/^http/, "ws")
 
   // Check if pod already exists
   if (session.containerId) {
@@ -1509,13 +1613,13 @@ export async function spawnK8sPod(session: SessionWithEnvironment): Promise<void
               `--replay-user-messages ` +
               `--model=${session.sessionContext.model} ` +
               `--sdk-url=${wsUrl}/v1/session_ingress/ws/${taggedSessionId} ` +
-              `--resume=${config.apiUrlForDockerContainers}/api/v1/session_ingress/session/${taggedSessionId}`,
+              `--resume=${config.apiUrlForExecutors}/api/v1/session_ingress/session/${taggedSessionId}`,
           ],
           env: [
             { name: "TOKEN", value: token },
             { name: "CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR", value: "3" },
             { name: "CLAUDE_CODE_SESSION_ACCESS_TOKEN", value: token },
-            { name: "ANTHROPIC_BASE_URL", value: `${config.apiUrlForDockerContainers}/api/anthropic` },
+            { name: "ANTHROPIC_BASE_URL", value: `${config.apiUrlForExecutors}/api/anthropic` },
             { name: "ANTHROPIC_API_KEY", value: token },
           ],
           resources: {
@@ -1669,7 +1773,7 @@ Update the Prisma schema and environment schemas to support the new kind:
 
 ```typescript
 // src/lib/schemas/environment.ts
-export const EnvironmentKind = z.enum(["local", "anthropic_cloud", "kubernetes"])
+export const EnvironmentKind = z.enum(["docker", "modal"])
 ```
 
 ---
@@ -1845,18 +1949,20 @@ model User {
 }
 
 model Session {
-  id              String        @id @db.Uuid
-  title           String        @default("")
-  environmentId   String        @db.Uuid
-  userId          String?       @db.Uuid
-  status          SessionStatus @default(idle)
-  type            String        @default("internal_session")
-  providerMode    Provider      @default(hosted)
-  sessionContext  Json          // SessionContext shape
-  lastEventUuid   String?       @db.Uuid
-  containerId     String?       // Docker container name
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id                  String        @id @db.Uuid
+  title               String        @default("")
+  environmentId       String        @db.Uuid
+  userId              String?       @db.Uuid
+  status              SessionStatus @default(idle)
+  type                String        @default("internal_session")
+  providerMode        Provider      @default(hosted)
+  sessionContext      Json          // SessionContext shape (API parity only)
+  lastEventUuid       String?       @db.Uuid
+  dockerContainerName String?       // Docker container name (kind=docker)
+  modalSandboxId      String?       // Modal sandbox ID (kind=modal)
+  modalSnapshotId     String?       // Modal snapshot image ID for resume
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
   environment     Environment   @relation(...)
   user            User?         @relation(...)
@@ -1880,7 +1986,7 @@ model Event {
 model Environment {
   id        String   @id @db.Uuid
   name      String
-  kind      String   @default("local")  // local, anthropic_cloud, kubernetes
+  kind      String   @default("docker")  // docker, modal
   state     String   @default("active")
   configEnc String?  // Encrypted EnvironmentConfig
   userId    String   @db.Uuid
@@ -1933,7 +2039,13 @@ PROXY_ANTHROPIC_API_KEY=sk-ant-api03-...
 
 # URLs
 DEPLOY_URL=https://example.com
-API_URL_FOR_DOCKER_CONTAINERS=http://host.docker.internal:3000  # Dev
+API_URL_FOR_EXECUTORS=http://host.docker.internal:3000  # Dev (Docker)
+# For Modal: API_URL_FOR_EXECUTORS must be publicly accessible (use ngrok/cloudflare tunnel in dev)
+
+# Modal (optional - only needed if using Modal sandboxes)
+MODAL_TOKEN_ID=<modal-token-id>
+MODAL_TOKEN_SECRET=<modal-token-secret>
+MODAL_APP_NAME=agent-quickstart  # optional
 
 # Optional
 LOG_LEVEL=info
@@ -1955,10 +2067,17 @@ export const config = {
   logLevel: env.LOG_LEVEL,
   anthropicApiUrl: "https://api.anthropic.com",
   deployUrl: env.DEPLOY_URL,
-  apiUrlForDockerContainers: env.API_URL_FOR_DOCKER_CONTAINERS ?? env.DEPLOY_URL,
+  apiUrlForExecutors: env.API_URL_FOR_EXECUTORS ?? env.DEPLOY_URL,
   allowedWsOrigins:
     env.ALLOWED_WS_ORIGINS?.split(",")
       .map((o) => o.trim())
       .filter(Boolean) ?? [],
+  modal: env.MODAL_TOKEN_ID
+    ? {
+        tokenId: env.MODAL_TOKEN_ID,
+        tokenSecret: env.MODAL_TOKEN_SECRET,
+        appName: env.MODAL_APP_NAME,
+      }
+    : null,
 }
 ```

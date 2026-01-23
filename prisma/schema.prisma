@@ -19,6 +19,10 @@ enum SessionStatus {
   deleted
 }
 
+enum ExecutorStatus {
+  spawning
+}
+
 enum EventStatus {
   pending
   sent
@@ -33,7 +37,7 @@ enum Provider {
 model Environment {
   id        String   @id @db.Uuid
   name      String
-  kind      String   @default("local")
+  kind      String   @default("docker")
   state     String   @default("active")
   configEnc String?  @map("config_enc")
   userId    String   @map("user_id") @db.Uuid
@@ -169,18 +173,21 @@ model GitHubAppConfig {
 }
 
 model Session {
-  id              String        @id @db.Uuid
-  title           String        @default("")
-  environmentId   String        @map("environment_id") @db.Uuid
-  userId          String?       @map("user_id") @db.Uuid
-  status          SessionStatus @default(idle)
-  type            String        @default("internal_session")
-  providerMode    Provider      @default(hosted) @map("provider_mode")
-  sessionContext  Json          @map("session_context")
-  lastEventUuid   String?       @map("last_event_uuid") @db.Uuid
-  containerId     String?       @map("container_id")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  id                  String          @id @db.Uuid
+  title               String          @default("")
+  environmentId       String          @map("environment_id") @db.Uuid
+  userId              String?         @map("user_id") @db.Uuid
+  status              SessionStatus   @default(idle)
+  type                String          @default("internal_session")
+  providerMode        Provider        @default(hosted) @map("provider_mode")
+  sessionContext      Json            @map("session_context")
+  lastEventUuid       String?         @map("last_event_uuid") @db.Uuid
+  executorStatus      ExecutorStatus? @map("executor_status")
+  dockerContainerName String?         @map("docker_container_name")
+  modalSandboxId      String?         @map("modal_sandbox_id")
+  modalSnapshotId     String?         @map("modal_snapshot_id")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
 
   environment     Environment   @relation(fields: [environmentId], references: [id])
   user            User?         @relation(fields: [userId], references: [id])
