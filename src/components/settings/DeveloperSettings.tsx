@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MaskedInput } from "@/components/ui/masked-input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { clientConfig } from "@/config.client"
 import { type SettingsResponse } from "@/lib/schemas/settings"
 
 export function DeveloperSettings() {
@@ -91,7 +92,7 @@ export function DeveloperSettings() {
             <SelectContent>
               <SelectItem value={Provider.hosted}>Hosted</SelectItem>
               <SelectItem value={Provider.byok}>BYOK</SelectItem>
-              <SelectItem value={Provider.debug}>Debug</SelectItem>
+              {clientConfig.showDebugOptions && <SelectItem value={Provider.debug}>Debug</SelectItem>}
             </SelectContent>
           </Select>
         </div>
@@ -157,70 +158,72 @@ export function DeveloperSettings() {
         )}
       </div>
 
-      <div className="border-t border-border pt-6 space-y-4">
-        <h3 className="text-base font-medium text-text-100">Debug</h3>
-        <Alert variant="warning">
-          <AlertTriangle className="size-4" />
-          <AlertTitle>Debug only</AlertTitle>
-          <AlertDescription>
-            Session keys are a dangerous authentication method. Only use this for debugging Anthropic API interoperability.
-          </AlertDescription>
-        </Alert>
+      {clientConfig.showDebugOptions && (
+        <div className="border-t border-border pt-6 space-y-4">
+          <h3 className="text-base font-medium text-text-100">Debug</h3>
+          <Alert variant="warning">
+            <AlertTriangle className="size-4" />
+            <AlertTitle>Debug only</AlertTitle>
+            <AlertDescription>
+              Session keys are a dangerous authentication method. Only use this for debugging Anthropic API interoperability.
+            </AlertDescription>
+          </Alert>
 
-        <div className="space-y-2">
-          <Label>Session Key</Label>
-          <MaskedInput
-            displayValue={settings?.anthropicSessionKeyMasked ?? undefined}
-            placeholder="sk-ant-sid01-..."
-            value={anthropicSessionKey}
-            onValueChange={setAnthropicSessionKey}
-            editing={anthropicSessionKeyEdited}
-            onEditingChange={setAnthropicSessionKeyEdited}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Organization UUID</Label>
-          <Input
-            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-            value={anthropicOrgUuid}
-            onChange={(e) => setAnthropicOrgUuid(e.target.value)}
-          />
-        </div>
-        {debugChanged && (
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setAnthropicSessionKey("")
-                setAnthropicSessionKeyEdited(false)
-                setAnthropicOrgUuid(settings?.anthropicOrgUuid ?? "")
-              }}
-              disabled={saving === "debug"}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() =>
-                save(
-                  "debug",
-                  {
-                    ...(anthropicSessionKeyEdited && { anthropicSessionKey }),
-                    anthropicOrgUuid,
-                  },
-                  () => {
-                    setAnthropicSessionKey("")
-                    setAnthropicSessionKeyEdited(false)
-                  }
-                )
-              }
-              disabled={saving === "debug"}
-            >
-              {saving === "debug" ? "Saving..." : "Save"}
-            </Button>
+          <div className="space-y-2">
+            <Label>Session Key</Label>
+            <MaskedInput
+              displayValue={settings?.anthropicSessionKeyMasked ?? undefined}
+              placeholder="sk-ant-sid01-..."
+              value={anthropicSessionKey}
+              onValueChange={setAnthropicSessionKey}
+              editing={anthropicSessionKeyEdited}
+              onEditingChange={setAnthropicSessionKeyEdited}
+            />
           </div>
-        )}
-      </div>
+
+          <div className="space-y-2">
+            <Label>Organization UUID</Label>
+            <Input
+              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              value={anthropicOrgUuid}
+              onChange={(e) => setAnthropicOrgUuid(e.target.value)}
+            />
+          </div>
+          {debugChanged && (
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAnthropicSessionKey("")
+                  setAnthropicSessionKeyEdited(false)
+                  setAnthropicOrgUuid(settings?.anthropicOrgUuid ?? "")
+                }}
+                disabled={saving === "debug"}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() =>
+                  save(
+                    "debug",
+                    {
+                      ...(anthropicSessionKeyEdited && { anthropicSessionKey }),
+                      anthropicOrgUuid,
+                    },
+                    () => {
+                      setAnthropicSessionKey("")
+                      setAnthropicSessionKeyEdited(false)
+                    }
+                  )
+                }
+                disabled={saving === "debug"}
+              >
+                {saving === "debug" ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
