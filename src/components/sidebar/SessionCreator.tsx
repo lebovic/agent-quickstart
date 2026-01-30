@@ -15,6 +15,7 @@ import { EnvironmentDialog } from "./EnvironmentDialog"
 import type { Environment } from "@/lib/types/anthropic_session"
 import { listEnvironments } from "@/lib/api/anthropic_client"
 import { RepoSelector } from "@/components/github"
+import { clientConfig } from "@/config.client"
 import { usePreferencesStore } from "@/lib/stores/preferences-store"
 import { generateBranchName } from "@/lib/executor/git-commands"
 
@@ -144,26 +145,28 @@ export function SessionCreator({ collapsed = false, onExpand }: { collapsed?: bo
           title: "", // Let backend generate LLM title
           environment_id: selectedEnvId,
           session_context: {
-            sources: selectedRepo
-              ? [
-                  {
-                    type: "git_repository",
-                    url: `https://github.com/${selectedRepo.owner}/${selectedRepo.repo}`,
-                  },
-                ]
-              : [],
-            outcomes: selectedRepo
-              ? [
-                  {
-                    type: "git_repository",
-                    git_info: {
-                      type: "github",
-                      repo: `${selectedRepo.owner}/${selectedRepo.repo}`,
-                      branches: [generateBranchName()],
+            sources:
+              gitIntegrationEnabled && selectedRepo
+                ? [
+                    {
+                      type: "git_repository",
+                      url: `https://github.com/${selectedRepo.owner}/${selectedRepo.repo}`,
                     },
-                  },
-                ]
-              : [],
+                  ]
+                : [],
+            outcomes:
+              gitIntegrationEnabled && selectedRepo
+                ? [
+                    {
+                      type: "git_repository",
+                      git_info: {
+                        type: "github",
+                        repo: `${selectedRepo.owner}/${selectedRepo.repo}`,
+                        branches: [generateBranchName()],
+                      },
+                    },
+                  ]
+                : [],
             model: selectedModel,
           },
           events: [
@@ -220,7 +223,10 @@ export function SessionCreator({ collapsed = false, onExpand }: { collapsed?: bo
     setEnvDialogOpen(true)
   }
 
-  const canSubmit = prompt.trim().length > 0 && !isCreating && !!selectedEnvId && !!selectedRepo
+  const gitIntegrationEnabled = clientConfig.gitIntegrationMode !== "disabled"
+  const gitIntegrationRequired = clientConfig.gitIntegrationMode === "required"
+  const hasRequiredRepo = !gitIntegrationRequired || !!selectedRepo
+  const canSubmit = prompt.trim().length > 0 && !isCreating && !!selectedEnvId && hasRequiredRepo
   const selectedEnv = envData?.environments.find((e) => e.environment_id === selectedEnvId)
 
   if (collapsed) {
@@ -361,9 +367,12 @@ export function SessionCreator({ collapsed = false, onExpand }: { collapsed?: bo
 
         {/* Repo and environment selectors */}
         <div className="flex items-center gap-1 px-2 pb-1">
-          <RepoSelector value={selectedRepo} onChange={setSelectedRepo} disabled={isCreating} />
-
-          <div className="h-5 w-px bg-border-300" />
+          {gitIntegrationEnabled && (
+            <>
+              <RepoSelector value={selectedRepo} onChange={setSelectedRepo} disabled={isCreating} />
+              <div className="h-5 w-px bg-border-300" />
+            </>
+          )}
 
           <Popover open={envPopoverOpen} onOpenChange={setEnvPopoverOpen}>
             <PopoverTrigger asChild>

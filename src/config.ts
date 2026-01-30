@@ -41,6 +41,11 @@ const envSchema = z.object({
   MODAL_APP_NAME: z.string().default("agent-quickstart"),
   // Default executor for new environments ("docker" or "modal")
   DEFAULT_EXECUTOR: z.enum(["docker", "modal"]).default("docker"),
+  // Git integration mode
+  // - required: Sessions must have a repo, GitHub App must be configured
+  // - optional: Sessions can have repos, GitHub App must be configured if used
+  // - disabled: No git features, GitHub App not required
+  GIT_INTEGRATION_MODE: z.enum(["required", "optional", "disabled"]).default("optional"),
 })
 
 const env = envSchema.parse(process.env)
@@ -80,4 +85,5 @@ export const config = {
       }
     : null,
   defaultExecutor: env.DEFAULT_EXECUTOR,
+  gitIntegrationMode: env.GIT_INTEGRATION_MODE,
 }

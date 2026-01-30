@@ -62,11 +62,13 @@ export function buildSessionCommands(
 
   const claudeCmd = `exec 3<<<"$TOKEN" && exec claude ${args.map((a) => `'${a}'`).join(" ")}`
 
-  // Build git setup commands
-  const gitSetupCommands = buildGitSetupCommands(config.apiUrlForExecutors)
-  const { cloneCommands, workDir } = buildCloneCommands(context.sources, context.outcomes)
-  const allSetupCommands = [...gitSetupCommands, ...cloneCommands]
-  const setupCmd = allSetupCommands.length > 0 ? allSetupCommands.join(" && ") : ""
+  // Build git setup and clone commands (skip if no git sources)
+  const hasGitSource = context.sources.some((s) => s.type === "git_repository")
+  const { cloneCommands, workDir } = hasGitSource
+    ? buildCloneCommands(context.sources, context.outcomes)
+    : { cloneCommands: [], workDir: "/home/user" }
+  const setupCommands = hasGitSource ? [...buildGitSetupCommands(config.apiUrlForExecutors), ...cloneCommands] : []
+  const setupCmd = setupCommands.join(" && ")
 
   log.debug({ sources: context.sources, outcomes: context.outcomes, setupCmd, workDir }, "Built session commands")
 

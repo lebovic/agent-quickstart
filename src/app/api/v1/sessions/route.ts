@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { type Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { generateUuid, envIdToUuid, sessionIdToUuid } from "@/lib/id"
+import { isGitIntegrationRequired } from "@/lib/git/mode"
 import { badRequest, notFound, unauthorized } from "@/lib/http-errors"
 import { parsePaginationParams, paginatedResponse } from "@/lib/pagination"
 import { CreateSessionRequest, toApiSession } from "@/lib/schemas/session"
@@ -61,6 +62,14 @@ export async function POST(request: NextRequest) {
   }
 
   const { data } = parsed
+
+  if (isGitIntegrationRequired()) {
+    const hasRepo = data.session_context.sources.some((s) => s.type === "git_repository")
+    if (!hasRepo) {
+      return badRequest("Repository selection is required")
+    }
+  }
+
   let environmentId: string
 
   try {

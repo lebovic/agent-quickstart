@@ -139,7 +139,11 @@ npm run test:run  # Single run
    ```bash
    openssl rand -base64 32  # Run 3 times, once for each secret
    ```
-3. Set up a GitHub App for repo access - see `docs/setting_up_github.md`
+3. Configure git integration mode via `GIT_INTEGRATION_MODE` and `NEXT_PUBLIC_GIT_INTEGRATION_MODE`:
+   - `disabled` - No git features, GitHub App setup not required
+   - `optional` - Repo selection available but not required for sessions (default). GitHub App must be configured.
+   - `required` - Sessions must have a repo selected. GitHub App must be configured.
+   - For `optional` or `required`, set up a GitHub App - see `docs/setting_up_github.md`
 4. Start Postgres and run migrations:
    ```bash
    docker-compose up -d
