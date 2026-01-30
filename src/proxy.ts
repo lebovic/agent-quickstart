@@ -1,7 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { config as appConfig } from "@/config"
 import { prisma } from "@/lib/db"
 import { log } from "@/lib/logger"
 import { auth } from "@/lib/auth/auth"
+
+const GIT_ROUTE_PREFIXES = ["/api/github", "/api/auth/github", "/api/code/repos", "/api/git-proxy"]
 
 // Basic rate limiting for a somewhat self-contained, deployable project.
 // Hits Postgres on every request. Suboptimal, but tenable to start
@@ -87,6 +90,16 @@ async function checkRateLimit(request: NextRequest): Promise<NextResponse | null
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  // Block git routes when git integration is disabled
+  if (appConfig.gitIntegrationMode === "disabled") {
+    if (GIT_ROUTE_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+      return NextResponse.json(
+        { type: "error", error: { type: "not_found_error", message: "Git integration is disabled" } },
+        { status: 404 }
+      )
+    }
+  }
 
   // Rate limit API routes
   if (pathname.startsWith("/api")) {

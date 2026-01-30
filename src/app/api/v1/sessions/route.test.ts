@@ -1,9 +1,14 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest"
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/db"
 import { generateUuid, uuidToEnvId } from "@/lib/id"
 import { GET, POST } from "./route"
 import { TEST_USER_ID } from "../../../../../vitest.setup"
+
+// Mock git integration to optional so tests don't require repos
+vi.mock("@/lib/git/mode", () => ({
+  isGitIntegrationRequired: () => false,
+}))
 
 describe("GET /api/v1/sessions", () => {
   const testEnvId = generateUuid()

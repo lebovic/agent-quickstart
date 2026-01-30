@@ -2034,6 +2034,13 @@ JWT_SECRET=<base64, min 44 chars>
 ENCRYPTION_SECRET=<base64, min 44 chars>
 BETTER_AUTH_SECRET=<base64, min 44 chars>
 
+# Git integration mode (disabled, optional, required)
+# - disabled: No git features, GitHub App not required
+# - optional: Repo selection available but not required (default). GitHub App must be configured.
+# - required: Sessions must select a repo. GitHub App must be configured.
+GIT_INTEGRATION_MODE=optional
+NEXT_PUBLIC_GIT_INTEGRATION_MODE=optional
+
 # Anthropic (for hosted mode)
 PROXY_ANTHROPIC_API_KEY=sk-ant-api03-...
 
@@ -2068,6 +2075,7 @@ export const config = {
   anthropicApiUrl: "https://api.anthropic.com",
   deployUrl: env.DEPLOY_URL,
   apiUrlForExecutors: env.API_URL_FOR_EXECUTORS ?? env.DEPLOY_URL,
+  gitIntegrationMode: env.GIT_INTEGRATION_MODE, // "disabled" | "optional" | "required"
   allowedWsOrigins:
     env.ALLOWED_WS_ORIGINS?.split(",")
       .map((o) => o.trim())
