@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { generateUuid, uuidToSessionId, sessionIdToUuid, uuidToEnvId, envIdToUuid } from "./id"
+import { generateUuid, uuidToSessionId, sessionIdToUuid, uuidToEnvId, envIdToUuid, uuidToFileId, fileIdToUuid } from "./id"
 
 describe("generateUuid", () => {
   it("generates valid UUID v4 format", () => {
@@ -80,5 +80,36 @@ describe("environment ID conversion", () => {
 
   it("throws on invalid environment ID prefix", () => {
     expect(() => envIdToUuid("invalid_123")).toThrow("Invalid environment ID format")
+  })
+})
+
+describe("file ID conversion", () => {
+  const testUuid = "550e8400-e29b-41d4-a716-446655440000"
+
+  it("converts UUID to file ID with base62 encoding", () => {
+    const fileId = uuidToFileId(testUuid)
+    expect(fileId).toMatch(/^file_[0-9A-Za-z]{24}$/)
+    expect(fileId).toBe("file_002aUyqjCzEIiEcYMKj7TZtw")
+  })
+
+  it("converts file ID back to UUID", () => {
+    const fileId = "file_002aUyqjCzEIiEcYMKj7TZtw"
+    const uuid = fileIdToUuid(fileId)
+    expect(uuid).toBe(testUuid)
+  })
+
+  it("roundtrips correctly", () => {
+    const uuid = generateUuid()
+    const fileId = uuidToFileId(uuid)
+    const recovered = fileIdToUuid(fileId)
+    expect(recovered).toBe(uuid)
+  })
+
+  it("throws on invalid file ID prefix", () => {
+    expect(() => fileIdToUuid("invalid_123")).toThrow("Invalid file ID format")
+  })
+
+  it("throws on session ID passed to fileIdToUuid", () => {
+    expect(() => fileIdToUuid("session_002aUyqjCzEIiEcYMKj7TZtw")).toThrow("Invalid file ID format")
   })
 })

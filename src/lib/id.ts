@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid"
 
 const SESSION_PREFIX = "session_"
 const ENV_PREFIX = "env_"
+const FILE_PREFIX = "file_"
 
 // Base62 alphabet (0-9, A-Z, a-z)
 const BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -86,5 +87,17 @@ export function envIdToUuid(envId: string): string {
     throw new Error(`Invalid environment ID format: ${envId}`)
   }
   const encoded = envId.slice(ENV_PREFIX.length)
+  return base62ToUuid(encoded)
+}
+
+export function uuidToFileId(uuid: string): string {
+  return FILE_PREFIX + uuidToBase62(uuid)
+}
+
+export function fileIdToUuid(fileId: string): string {
+  if (!fileId.startsWith(FILE_PREFIX)) {
+    throw new Error(`Invalid file ID format: ${fileId}`)
+  }
+  const encoded = fileId.slice(FILE_PREFIX.length)
   return base62ToUuid(encoded)
 }

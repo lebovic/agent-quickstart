@@ -42,6 +42,8 @@ describe("buildSessionCommands", () => {
     dockerContainerName: null,
     modalSandboxId: null,
     modalSnapshotId: null,
+    storageUsedBytes: BigInt(0),
+    storageQuotaBytes: BigInt(104857600),
     createdAt: new Date(),
     updatedAt: new Date(),
   }

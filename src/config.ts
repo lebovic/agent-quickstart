@@ -46,6 +46,13 @@ const envSchema = z.object({
   // - optional: Sessions can have repos, GitHub App must be configured if used
   // - disabled: No git features, GitHub App not required
   GIT_INTEGRATION_MODE: z.enum(["required", "optional", "disabled"]).default("optional"),
+  // Session files - S3-backed persistent storage
+  SESSION_FILES_ENABLED: z.string().optional(), // Defaults to "true" if S3_BUCKET is set
+  SESSION_FILES_S3_BUCKET: z.string().optional(),
+  SESSION_FILES_S3_REGION: z.string().default("us-east-1"),
+  SESSION_FILES_S3_ROLE_ARN: z.string().optional(),
+  SESSION_FILES_QUOTA_BYTES: z.coerce.number().default(104857600), // 100MB
+  SESSION_FILES_MAX_FILE_SIZE_BYTES: z.coerce.number().default(52428800), // 50MB
 })
 
 const env = envSchema.parse(process.env)
@@ -86,4 +93,20 @@ export const config = {
     : null,
   defaultExecutor: env.DEFAULT_EXECUTOR,
   gitIntegrationMode: env.GIT_INTEGRATION_MODE,
+  sessionFiles: (() => {
+    if (env.SESSION_FILES_ENABLED !== "true") return null
+    if (!env.SESSION_FILES_S3_BUCKET) {
+      throw new Error("SESSION_FILES_S3_BUCKET is required when SESSION_FILES_ENABLED=true")
+    }
+    if (!env.SESSION_FILES_S3_ROLE_ARN) {
+      throw new Error("SESSION_FILES_S3_ROLE_ARN is required when SESSION_FILES_ENABLED=true")
+    }
+    return {
+      bucket: env.SESSION_FILES_S3_BUCKET,
+      region: env.SESSION_FILES_S3_REGION,
+      roleArn: env.SESSION_FILES_S3_ROLE_ARN,
+      quotaBytes: env.SESSION_FILES_QUOTA_BYTES,
+      maxFileSizeBytes: env.SESSION_FILES_MAX_FILE_SIZE_BYTES,
+    }
+  })(),
 }
