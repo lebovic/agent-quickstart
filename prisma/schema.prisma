@@ -186,12 +186,15 @@ model Session {
   dockerContainerName String?         @map("docker_container_name")
   modalSandboxId      String?         @map("modal_sandbox_id")
   modalSnapshotId     String?         @map("modal_snapshot_id")
+  storageUsedBytes    BigInt          @default(0) @map("storage_used_bytes")
+  storageQuotaBytes   BigInt          @default(104857600) @map("storage_quota_bytes")
   createdAt           DateTime        @default(now()) @map("created_at")
   updatedAt           DateTime        @updatedAt @map("updated_at")
 
   environment     Environment   @relation(fields: [environmentId], references: [id])
   user            User?         @relation(fields: [userId], references: [id])
   events          Event[]
+  files           File[]
 
   @@index([environmentId])
   @@index([userId])
@@ -217,4 +220,20 @@ model Event {
   @@index([sessionId, sequenceNum])
   @@index([sessionId, status])
   @@map("events")
+}
+
+model File {
+  id              String    @id @default(uuid()) @db.Uuid
+  s3Bucket        String    @map("s3_bucket")
+  s3Key           String    @map("s3_key")
+  filename        String
+  mimeType        String?   @map("mime_type")
+  sizeBytes       BigInt    @map("size_bytes")
+  originSessionId String?   @map("origin_session_id") @db.Uuid
+  originSession   Session?  @relation(fields: [originSessionId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@unique([s3Bucket, s3Key])
+  @@index([originSessionId])
+  @@map("files")
 }
