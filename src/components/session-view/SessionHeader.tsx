@@ -5,13 +5,17 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import type { Session, SessionsResponse } from "@/lib/types/anthropic_session"
-import { ArrowLeft, Cloud, Terminal, Copy, ChevronDown, Pencil, Archive } from "lucide-react"
+import { ArrowLeft, Cloud, Terminal, Copy, ChevronDown, Pencil, Archive, PanelRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { toast } from "sonner"
 import { usePreferencesStore } from "@/lib/stores/preferences-store"
+import { useFilesPanelStore } from "@/lib/stores/files-panel-store"
+import { clientConfig } from "@/config.client"
+import { cn } from "@/lib/utils"
 
 type SessionHeaderProps = {
   session: Session
@@ -34,6 +38,8 @@ export function SessionHeader({ session }: SessionHeaderProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { provider } = usePreferencesStore()
+  const { isOpen, toggle: toggleFilesPanel } = useFilesPanelStore()
+  const filesPanelOpen = isOpen(session.id)
   const [renameDialogOpen, setRenameDialogOpen] = useState(false)
   const [newTitle, setNewTitle] = useState(session.title)
   const [isRenaming, setIsRenaming] = useState(false)
@@ -165,23 +171,40 @@ export function SessionHeader({ session }: SessionHeaderProps) {
         </DropdownMenu>
       </div>
 
-      <div className="hidden md:flex items-center gap-3">
-        {fullBranchPath && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleCopyBranch}
-            className="h-auto py-1 px-2 text-[12px] font-mono text-text-300 hover:text-text-200 gap-1.5"
-          >
-            {truncatedBranch}
-            <Copy className="size-3" />
-          </Button>
-        )}
-        {provider === "debug" && (
-          <Button variant="outline" size="sm" className="text-[12px] font-normal gap-1.5" onClick={handleCopyCommand}>
-            Open in CLI
-            <Terminal className="size-3.5 text-accent-main-100" />
-          </Button>
+      <div className="flex items-center gap-3">
+        <div className="hidden md:flex items-center gap-3">
+          {fullBranchPath && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopyBranch}
+              className="h-auto py-1 px-2 text-[12px] font-mono text-text-300 hover:text-text-200 gap-1.5"
+            >
+              {truncatedBranch}
+              <Copy className="size-3" />
+            </Button>
+          )}
+          {provider === "debug" && (
+            <Button variant="outline" size="sm" className="text-[12px] font-normal gap-1.5" onClick={handleCopyCommand}>
+              Open in CLI
+              <Terminal className="size-3.5 text-accent-main-100" />
+            </Button>
+          )}
+        </div>
+        {clientConfig.sessionFilesEnabled && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => toggleFilesPanel(session.id)}
+                className="md:hidden text-text-400 hover:text-text-100"
+              >
+                <PanelRight className={cn("size-4", filesPanelOpen && "text-accent-main-100")} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{filesPanelOpen ? "Close files" : "Open files"}</TooltipContent>
+          </Tooltip>
         )}
       </div>
 

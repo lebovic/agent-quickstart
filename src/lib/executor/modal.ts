@@ -1,4 +1,4 @@
-import { ModalClient, type Sandbox, type Image as ModalImage } from "modal"
+import { ModalClient, type Sandbox, type Image as ModalImage, type CloudBucketMount } from "modal"
 import { type Session } from "@prisma/client"
 import { config } from "@/config"
 import { log } from "@/lib/logger"
@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db"
 import { SessionContext } from "@/lib/schemas/session"
 import { decryptConfig } from "@/lib/schemas/environment"
 import { buildSessionCommands } from "./session-commands"
+import { generateSessionS3Credentials } from "@/lib/s3/credentials"
 import type { SessionWithEnvironment } from "./index"
 
 // Cleanup idle sessions every minute
@@ -147,11 +148,40 @@ export async function spawnSandbox(session: SessionWithEnvironment, retryCount =
   // Create secret from environment variables
   const secret = await modal.secrets.fromObject(env)
 
+  // Set up S3 cloud bucket mounts if session files are enabled
+  // Two mounts: user (read-only) and agent (read-write)
+  let cloudBucketMounts: Record<string, CloudBucketMount> | undefined
+  if (config.sessionFiles) {
+    const s3Creds = await generateSessionS3Credentials(sessionId)
+    const s3Secret = await modal.secrets.fromObject({
+      AWS_ACCESS_KEY_ID: s3Creds.accessKeyId,
+      AWS_SECRET_ACCESS_KEY: s3Creds.secretAccessKey,
+      AWS_SESSION_TOKEN: s3Creds.sessionToken,
+      AWS_REGION: config.sessionFiles.region,
+    })
+    const userMount = modal.cloudBucketMounts.create(config.sessionFiles.bucket, {
+      secret: s3Secret,
+      keyPrefix: `sessions/${sessionId}/user/`,
+      readOnly: true,
+    })
+    const agentMount = modal.cloudBucketMounts.create(config.sessionFiles.bucket, {
+      secret: s3Secret,
+      keyPrefix: `sessions/${sessionId}/agent/`,
+      readOnly: false,
+    })
+    cloudBucketMounts = {
+      "/file-drop/user": userMount,
+      "/file-drop/agent": agentMount,
+    }
+    log.debug({ sessionId }, "Configured S3 mounts for session (user: read-only, agent: read-write)")
+  }
+
   // Create the sandbox
   const sandbox = await modal.sandboxes.create(app, baseImage, {
     secrets: [secret],
     timeoutMs: 60 * 60 * 1000, // 1 hour
     workdir: "/home/user",
+    cloudBucketMounts,
   })
 
   const sandboxId = sandbox.sandboxId

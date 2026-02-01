@@ -1073,6 +1073,160 @@ Create a new environment.
 }
 ```
 
+### Files API
+
+File upload/download for sessions. Files are stored in S3 with metadata in Postgres.
+
+> **Note:** Session files currently require the Modal executor. Files are mounted into sandboxes via Modal's cloudBucketMounts feature, which has no Docker equivalent.
+
+#### Setup
+
+**Environment Variables:**
+
+```bash
+# Session files config
+SESSION_FILES_ENABLED=true
+SESSION_FILES_S3_BUCKET=my-bucket-name
+SESSION_FILES_S3_REGION=us-west-2
+SESSION_FILES_S3_ROLE_ARN=arn:aws:iam::ACCOUNT_ID:role/my-session-files-role
+NEXT_PUBLIC_SESSION_FILES_ENABLED=true  # Shows file panel in UI
+
+# Modal is required for session files
+DEFAULT_EXECUTOR=modal
+MODAL_TOKEN_ID=...
+MODAL_TOKEN_SECRET=...
+
+# Server AWS credentials (or use IAM role on EC2/ECS)
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_REGION=us-west-2
+```
+
+**AWS Authentication Flow:**
+
+1. Server uses standard AWS SDK credential chain (env vars, IAM role, etc.)
+2. Server calls STS AssumeRole to get scoped credentials for each session
+3. Modal mounts S3 bucket into sandbox at `/file-drop/user` (read-only) and `/file-drop/agent` (read-write)
+
+**IAM Role Setup:**
+
+Create an IAM role that the server can assume:
+
+1. **Trust Policy** - Allow the server's IAM identity to assume it:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::ACCOUNT_ID:user/server-user"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+```
+
+2. **Inline Policy** (named `s3-access`):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::my-bucket-name"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload"],
+      "Resource": "arn:aws:s3:::my-bucket-name/sessions/*"
+    }
+  ]
+}
+```
+
+The server's IAM identity needs `sts:AssumeRole` permission for the role.
+
+**S3 Key Structure:** `sessions/{sessionId}/{source}/{filename}` where `source` is `user` or `agent`.
+
+**Storage Limits:** 100 MB per session (`SESSION_FILES_QUOTA_BYTES`), 50 MB max file size (`SESSION_FILES_MAX_FILE_SIZE_BYTES`).
+
+**Soft Delete:** Files are soft-deleted in DB (`deletedAt` timestamp) but hard-deleted from S3. The unique constraint on `(s3_bucket, s3_key)` is a partial index excluding deleted records.
+
+#### GET /api/v1/sessions/{id}/files
+
+List files for a session (excludes soft-deleted files).
+
+**Response:**
+
+```json
+{
+  "data": [
+    {
+      "type": "file",
+      "id": "file_0A1B2C3D4E5F6G7H8I9J0K1L",
+      "filename": "document.pdf",
+      "mime_type": "application/pdf",
+      "size_bytes": 12345,
+      "source": "user",
+      "created_at": "2025-01-20T10:30:00.000Z"
+    }
+  ],
+  "has_more": false,
+  "first_id": "file_0A1B2C3D4E5F6G7H8I9J0K1L",
+  "last_id": "file_0A1B2C3D4E5F6G7H8I9J0K1L"
+}
+```
+
+#### POST /api/v1/sessions/{id}/files
+
+Upload a file. Uses multipart form data.
+
+**Request:** `Content-Type: multipart/form-data` with `file` field.
+
+**Response (201 Created):**
+
+```json
+{
+  "type": "file",
+  "id": "file_0A1B2C3D4E5F6G7H8I9J0K1L",
+  "filename": "document.pdf",
+  "mime_type": "application/pdf",
+  "size_bytes": 12345,
+  "source": "user",
+  "created_at": "2025-01-20T10:30:00.000Z"
+}
+```
+
+**Error Responses:**
+
+- `400` - File too large or quota exceeded
+- `409` - File with same name already exists
+
+#### DELETE /api/v1/sessions/{id}/files/{fileId}
+
+Delete a file. Hard deletes from S3, soft deletes in database (sets `deletedAt`).
+
+**Response:** `204 No Content`
+
+#### GET /api/v1/sessions/{id}/files/{fileId}/presigned-url
+
+Get a presigned download URL (valid 15 minutes).
+
+**Response:**
+
+```json
+{
+  "type": "file_download_url",
+  "url": "https://bucket.s3.amazonaws.com/...",
+  "expires_at": "2025-01-20T10:45:00.000Z"
+}
+```
+
 ### Session Ingress API (Container Use Only)
 
 These endpoints are used by containers to fetch/update session state.

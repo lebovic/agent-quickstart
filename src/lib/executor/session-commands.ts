@@ -11,6 +11,12 @@ import { type SessionContext } from "@/lib/schemas/session"
 import { generateSessionJwt } from "@/lib/auth/jwt"
 import { buildGitSetupCommands, buildCloneCommands } from "./git-commands"
 
+const FILE_DROP_SYSTEM_PROMPT =
+  "File drop: The user can exchange files with you via a panel on the right side of their screen. " +
+  "User-uploaded files appear at /file-drop/user/ (read-only, do not modify). " +
+  "Write files for the user to /file-drop/agent/ and they will appear in their panel. " +
+  "The user may need to click File Drop above their input to open the panel."
+
 export type SessionCommands = {
   setupCmd: string // Git setup, clone, checkout commands (empty string if none)
   claudeCmd: string // Claude CLI command
@@ -49,6 +55,16 @@ export function buildSessionCommands(
 
   if (context.disallowed_tools.length > 0) {
     args.push(`--disallowed-tools=${context.disallowed_tools.join(",")}`)
+  }
+
+  // Build appended system prompt (must be single line, no quotes)
+  const systemPromptParts: string[] = []
+  if (config.sessionFiles) {
+    systemPromptParts.push(FILE_DROP_SYSTEM_PROMPT)
+  }
+  const appendedSystemPrompt = systemPromptParts.join(" ")
+  if (appendedSystemPrompt) {
+    args.push(`--append-system-prompt=${appendedSystemPrompt}`)
   }
 
   const env: Record<string, string> = {

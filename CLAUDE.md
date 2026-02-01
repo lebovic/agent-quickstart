@@ -183,6 +183,18 @@ Sessions run in executors (Docker containers or Modal sandboxes). Configure whic
 
 - **DEBUG for trace-level logs.** Use `log.debug` for detailed trace logs (message contents, forwarding, etc.). Don't bump to INFO just for debugging - DEBUG is appropriate.
 
+## Session Files
+
+Optional file uploads/downloads per session. Requires Modal executor (uses cloudBucketMounts). See `docs/design.md` for full AWS/IAM setup.
+
+```bash
+SESSION_FILES_ENABLED=true
+SESSION_FILES_S3_BUCKET=my-bucket
+SESSION_FILES_S3_ROLE_ARN=arn:aws:iam::ACCOUNT_ID:role/my-role
+NEXT_PUBLIC_SESSION_FILES_ENABLED=true
+DEFAULT_EXECUTOR=modal  # Required
+```
+
 ## Legal Documents
 
 The `/legal/` folder is gitignored and contains Terms of Service and Privacy Policy markdown files:

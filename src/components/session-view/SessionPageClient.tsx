@@ -3,6 +3,8 @@
 import { useQuery } from "@tanstack/react-query"
 import { SessionHeader } from "./SessionHeader"
 import { SessionViewClient } from "./SessionViewClient"
+import { FilesPanel } from "./FilesPanel"
+import { clientConfig } from "@/config.client"
 import type { Session, EventsResponse } from "@/lib/types/anthropic_session"
 
 async function fetchSession(sessionId: string): Promise<Session> {
@@ -43,9 +45,12 @@ export function SessionPageClient({ sessionId }: Props) {
   }
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
-      <SessionHeader session={sessionQuery.data!} />
-      <SessionViewClient initialEvents={eventsQuery.data!.data} session={sessionQuery.data!} />
+    <div className="flex flex-1 min-h-0">
+      <div className="flex flex-col flex-1 min-h-0">
+        <SessionHeader session={sessionQuery.data!} />
+        <SessionViewClient initialEvents={eventsQuery.data!.data} session={sessionQuery.data!} />
+      </div>
+      {clientConfig.sessionFilesEnabled && <FilesPanel sessionId={sessionId} />}
     </div>
   )
 }
