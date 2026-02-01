@@ -1,6 +1,7 @@
 import { z } from "zod"
 import type { File as PrismaFile } from "@prisma/client"
 import { uuidToFileId } from "@/lib/id"
+import { extractSource } from "@/lib/s3/operations"
 
 export const FileResponse = z.object({
   type: z.literal("file"),
@@ -8,7 +9,9 @@ export const FileResponse = z.object({
   filename: z.string(),
   mime_type: z.string().nullable(),
   size_bytes: z.number(),
+  source: z.enum(["user", "agent"]),
   created_at: z.string(),
+  deleted_at: z.string().nullable().optional(),
 })
 
 export const ListFilesResponse = z.object({
@@ -35,6 +38,8 @@ export function toApiFile(file: PrismaFile): FileResponse {
     filename: file.filename,
     mime_type: file.mimeType,
     size_bytes: Number(file.sizeBytes),
+    source: extractSource(file.s3Key),
     created_at: file.createdAt.toISOString(),
+    deleted_at: file.deletedAt?.toISOString() ?? null,
   }
 }

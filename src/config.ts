@@ -101,6 +101,12 @@ export const config = {
     if (!env.SESSION_FILES_S3_ROLE_ARN) {
       throw new Error("SESSION_FILES_S3_ROLE_ARN is required when SESSION_FILES_ENABLED=true")
     }
+    if (!env.MODAL_TOKEN_ID) {
+      throw new Error("Session files require Modal executor (MODAL_TOKEN_ID must be set)")
+    }
+    if (env.DEFAULT_EXECUTOR !== "modal") {
+      throw new Error("Session files require DEFAULT_EXECUTOR=modal")
+    }
     return {
       bucket: env.SESSION_FILES_S3_BUCKET,
       region: env.SESSION_FILES_S3_REGION,

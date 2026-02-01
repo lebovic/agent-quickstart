@@ -16,7 +16,8 @@ import { useMemo } from "react"
 import { EventRenderer } from "./events/EventRenderer"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
-import { ImageIcon, ArrowUp, X, StopCircle, Loader2, RotateCcw, GitPullRequestDraft } from "lucide-react"
+import { ImageIcon, ArrowUp, X, StopCircle, Loader2, RotateCcw, GitPullRequestDraft, File } from "lucide-react"
+import { useFilesPanelStore } from "@/lib/stores/files-panel-store"
 import { ActivitySpinner } from "@/components/ui/activity-spinner"
 
 type UploadedImage = {
@@ -138,6 +139,12 @@ function InputBar({
   // Build GitHub PR URL
   const prUrl = repo && branch ? `https://github.com/${repo}/compare/${branch}?expand=1` : ""
 
+  // Files panel state - show button when panel is closed (user may want to upload)
+  const { isOpen, open: openFilesPanel } = useFilesPanelStore()
+  const sessionId = session?.id
+  const isFilesPanelOpen = sessionId ? isOpen(sessionId) : false
+  const showFilesButton = !isFilesPanelOpen && !!sessionId
+
   const showConnectionRetry = connectionState === "disconnected" || connectionState === "error"
 
   return (
@@ -152,15 +159,28 @@ function InputBar({
         </div>
       )}
 
-      {/* Create PR - right aligned above input */}
-      {canCreatePR && (
-        <div className="w-[min(85%,768px)] flex justify-end mb-2 pointer-events-auto">
-          <Button variant="outline" size="sm" asChild className="h-8 px-3 text-[13px] font-normal text-text-200 gap-1.5">
-            <a href={prUrl} target="_blank" rel="noopener noreferrer">
-              Create PR
-              <GitPullRequestDraft className="size-3.5 text-accent-main-100" />
-            </a>
-          </Button>
+      {/* Action buttons - right aligned above input */}
+      {(canCreatePR || showFilesButton) && (
+        <div className="w-[min(85%,768px)] flex justify-end gap-2 mb-2 pointer-events-auto">
+          {showFilesButton && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openFilesPanel(sessionId!)}
+              className="h-8 px-3 text-[13px] font-normal text-text-200 gap-1.5"
+            >
+              File drop
+              <File className="size-3.5 text-accent-main-100" />
+            </Button>
+          )}
+          {canCreatePR && (
+            <Button variant="outline" size="sm" asChild className="h-8 px-3 text-[13px] font-normal text-text-200 gap-1.5">
+              <a href={prUrl} target="_blank" rel="noopener noreferrer">
+                Create PR
+                <GitPullRequestDraft className="size-3.5 text-accent-main-100" />
+              </a>
+            </Button>
+          )}
         </div>
       )}
 

@@ -5,6 +5,8 @@ import { getS3Client } from "./client"
 import { config } from "@/config"
 import { log } from "@/lib/logger"
 
+export type FileSource = "user" | "agent"
+
 export interface S3Object {
   bucket: string
   key: string
@@ -13,19 +15,32 @@ export interface S3Object {
 }
 
 /**
- * Build the S3 key for a session file.
- * Format: sessions/{sessionId}/{filename}
+ * Build the S3 key for a user-uploaded session file.
+ * Format: sessions/{sessionId}/user/{filename}
  */
 export function buildSessionS3Key(sessionId: string, filename: string): string {
-  return `sessions/${sessionId}/${filename}`
+  return `sessions/${sessionId}/user/${filename}`
 }
 
 /**
  * Extract filename from an S3 key.
+ * Handles paths like: sessions/{id}/user/{filename} or sessions/{id}/agent/{subdir}/{filename}
  */
 export function extractFilename(s3Key: string): string {
   const parts = s3Key.split("/")
   return parts[parts.length - 1]
+}
+
+/**
+ * Extract source (user/agent) from an S3 key.
+ * Format: sessions/{sessionId}/{source}/{...path}
+ */
+export function extractSource(s3Key: string): FileSource {
+  const source = s3Key.split("/")[2]
+  if (source === "user") return "user"
+  if (source === "agent") return "agent"
+  // Legacy files without source directory default to user
+  return "user"
 }
 
 /**

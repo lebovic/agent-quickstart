@@ -148,7 +148,8 @@ export async function spawnSandbox(session: SessionWithEnvironment, retryCount =
   // Create secret from environment variables
   const secret = await modal.secrets.fromObject(env)
 
-  // Set up S3 cloud bucket mount if session files are enabled
+  // Set up S3 cloud bucket mounts if session files are enabled
+  // Two mounts: user (read-only) and agent (read-write)
   let cloudBucketMounts: Record<string, CloudBucketMount> | undefined
   if (config.sessionFiles) {
     const s3Creds = await generateSessionS3Credentials(sessionId)
@@ -158,13 +159,21 @@ export async function spawnSandbox(session: SessionWithEnvironment, retryCount =
       AWS_SESSION_TOKEN: s3Creds.sessionToken,
       AWS_REGION: config.sessionFiles.region,
     })
-    const mount = modal.cloudBucketMounts.create(config.sessionFiles.bucket, {
+    const userMount = modal.cloudBucketMounts.create(config.sessionFiles.bucket, {
       secret: s3Secret,
-      keyPrefix: `sessions/${sessionId}/`,
+      keyPrefix: `sessions/${sessionId}/user/`,
+      readOnly: true,
+    })
+    const agentMount = modal.cloudBucketMounts.create(config.sessionFiles.bucket, {
+      secret: s3Secret,
+      keyPrefix: `sessions/${sessionId}/agent/`,
       readOnly: false,
     })
-    cloudBucketMounts = { "/persistent": mount }
-    log.debug({ sessionId }, "Configured S3 mount for session")
+    cloudBucketMounts = {
+      "/file-drop/user": userMount,
+      "/file-drop/agent": agentMount,
+    }
+    log.debug({ sessionId }, "Configured S3 mounts for session (user: read-only, agent: read-write)")
   }
 
   // Create the sandbox

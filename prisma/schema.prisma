@@ -232,8 +232,9 @@ model File {
   originSessionId String?   @map("origin_session_id") @db.Uuid
   originSession   Session?  @relation(fields: [originSessionId], references: [id], onDelete: SetNull)
   createdAt       DateTime  @default(now()) @map("created_at")
+  deletedAt       DateTime? @map("deleted_at")
 
-  @@unique([s3Bucket, s3Key])
+  // Unique constraint on non-deleted files is enforced via partial index in migration
   @@index([originSessionId])
   @@map("files")
 }

@@ -38,7 +38,8 @@ export function SessionHeader({ session }: SessionHeaderProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { provider } = usePreferencesStore()
-  const { isOpen: filesPanelOpen, toggle: toggleFilesPanel } = useFilesPanelStore()
+  const { isOpen, toggle: toggleFilesPanel } = useFilesPanelStore()
+  const filesPanelOpen = isOpen(session.id)
   const [renameDialogOpen, setRenameDialogOpen] = useState(false)
   const [newTitle, setNewTitle] = useState(session.title)
   const [isRenaming, setIsRenaming] = useState(false)
@@ -193,7 +194,12 @@ export function SessionHeader({ session }: SessionHeaderProps) {
         {clientConfig.sessionFilesEnabled && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={toggleFilesPanel} className="md:hidden text-text-400 hover:text-text-100">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => toggleFilesPanel(session.id)}
+                className="md:hidden text-text-400 hover:text-text-100"
+              >
                 <PanelRight className={cn("size-4", filesPanelOpen && "text-accent-main-100")} />
               </Button>
             </TooltipTrigger>

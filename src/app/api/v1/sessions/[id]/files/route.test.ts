@@ -13,9 +13,10 @@ vi.mock("@/lib/s3/sync", () => ({
 vi.mock("@/lib/s3/operations", () => ({
   uploadSessionFile: vi.fn().mockResolvedValue({
     bucket: "test-bucket",
-    key: "sessions/test-uuid/test.txt",
+    key: "sessions/test-uuid/user/test.txt",
   }),
   guessMimeType: vi.fn().mockReturnValue("text/plain"),
+  extractSource: vi.fn().mockReturnValue("user"),
 }))
 
 // Mock config to enable sessionFiles

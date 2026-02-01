@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { sessionIdToUuid, uuidToFileId } from "@/lib/id"
-import { badRequest, notFound, forbidden, unauthorized } from "@/lib/http-errors"
+import { badRequest, notFound, forbidden, unauthorized, conflict } from "@/lib/http-errors"
 import { getUserProviderContext } from "@/lib/auth/provider-context"
 import { syncSessionFiles } from "@/lib/s3/sync"
 import { uploadSessionFile, guessMimeType } from "@/lib/s3/operations"
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   await syncSessionFiles(sessionUuid)
 
   const files = await prisma.file.findMany({
-    where: { originSessionId: sessionUuid },
+    where: { originSessionId: sessionUuid, deletedAt: null },
     orderBy: { createdAt: "desc" },
   })
 
@@ -102,6 +102,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const quota = Number(session.storageQuotaBytes)
   if (currentUsed + file.size > quota) {
     return badRequest("Storage quota exceeded")
+  }
+
+  // Check if non-deleted file with same filename exists
+  const existingFile = await prisma.file.findFirst({
+    where: {
+      originSessionId: sessionUuid,
+      filename: file.name,
+      deletedAt: null,
+    },
+  })
+  if (existingFile) {
+    return conflict("File already exists")
   }
 
   const mimeType = file.type || guessMimeType(file.name)

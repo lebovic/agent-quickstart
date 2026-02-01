@@ -18,28 +18,32 @@ export async function syncSessionFiles(sessionId: string): Promise<void> {
   await prisma.$transaction(async (tx) => {
     // Upsert each S3 object - preserves IDs for existing files
     for (const obj of s3Objects) {
-      await tx.file.upsert({
-        where: {
-          s3Bucket_s3Key: { s3Bucket: obj.bucket, s3Key: obj.key },
-        },
-        create: {
-          s3Bucket: obj.bucket,
-          s3Key: obj.key,
-          filename: extractFilename(obj.key),
-          mimeType: guessMimeType(extractFilename(obj.key)),
-          sizeBytes: obj.size,
-          originSessionId: sessionId,
-          createdAt: obj.lastModified,
-        },
-        update: {
-          sizeBytes: obj.size,
-        },
+      const existing = await tx.file.findFirst({
+        where: { s3Bucket: obj.bucket, s3Key: obj.key, deletedAt: null },
       })
+      if (existing) {
+        await tx.file.update({
+          where: { id: existing.id },
+          data: { sizeBytes: obj.size },
+        })
+      } else {
+        await tx.file.create({
+          data: {
+            s3Bucket: obj.bucket,
+            s3Key: obj.key,
+            filename: extractFilename(obj.key),
+            mimeType: guessMimeType(extractFilename(obj.key)),
+            sizeBytes: obj.size,
+            originSessionId: sessionId,
+            createdAt: obj.lastModified,
+          },
+        })
+      }
     }
 
-    // Delete files no longer in S3
+    // Delete files no longer in S3 (only consider non-deleted files)
     const existingFiles = await tx.file.findMany({
-      where: { originSessionId: sessionId },
+      where: { originSessionId: sessionId, deletedAt: null },
       select: { id: true, s3Bucket: true, s3Key: true },
     })
 
